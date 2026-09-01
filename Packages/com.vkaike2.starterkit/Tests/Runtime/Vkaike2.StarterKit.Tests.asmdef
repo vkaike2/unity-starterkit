@@ -1,0 +1,22 @@
+{
+    "name": "Vkaike2.StarterKit.Tests",
+    "rootNamespace": "Vkaike2.StarterKit.Tests",
+    "references": [
+        "Vkaike2.StarterKit",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

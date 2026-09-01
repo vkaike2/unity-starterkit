@@ -1,0 +1,14 @@
+{
+    "name": "Vkaike2.StarterKit",
+    "rootNamespace": "Vkaike2.StarterKit",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

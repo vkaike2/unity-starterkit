@@ -104,3 +104,26 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# OS generated files
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# JetBrains Rider / IntelliJ project directory
+.idea/
+
+# Windows crash dumps
+*.stackdump
+
+# UPM / npm packaging artifacts (npm pack output, publish tooling, registry credentials)
+*.tgz
+node_modules/
+.npmrc
+
+# Unity Package Manager local cache
+/[Pp]ackages/[Pp]ackage[Cc]ache/
