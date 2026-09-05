@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using Vkaike2.StarterKit.Attributes;
@@ -10,36 +12,43 @@ namespace Vkaike2.StarterKit.Editor.Drawers
     {
         private const float HelpBoxLines = 2f;
 
+        private enum Visibility
+        {
+            Visible = 0,
+            Disabled = 1,
+            Hidden = 2,
+        }
+
+        private ShowIfAttribute[] _attributes;
+
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            var showIf = (ShowIfAttribute)attribute;
-            SerializedProperty condition = FindConditionProperty(property, showIf.ConditionName);
+            Visibility visibility = Evaluate(property, out string missingCondition);
 
-            if (condition == null)
+            if (missingCondition != null)
             {
                 return HelpBoxHeight() + EditorGUIUtility.standardVerticalSpacing +
                        EditorGUI.GetPropertyHeight(property, label, true);
             }
 
-            if (IsSatisfied(condition, showIf) || showIf.Mode == ShowIfMode.Disable)
+            if (visibility == Visibility.Hidden)
             {
-                return EditorGUI.GetPropertyHeight(property, label, true);
+                return -EditorGUIUtility.standardVerticalSpacing;
             }
 
-            return -EditorGUIUtility.standardVerticalSpacing;
+            return EditorGUI.GetPropertyHeight(property, label, true);
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            var showIf = (ShowIfAttribute)attribute;
-            SerializedProperty condition = FindConditionProperty(property, showIf.ConditionName);
+            Visibility visibility = Evaluate(property, out string missingCondition);
 
-            if (condition == null)
+            if (missingCondition != null)
             {
                 var helpRect = new Rect(position.x, position.y, position.width, HelpBoxHeight());
                 EditorGUI.HelpBox(
                     helpRect,
-                    $"[{showIf.GetType().Name}] No serialized field named '{showIf.ConditionName}' " +
+                    $"[{attribute.GetType().Name}] No serialized field named '{missingCondition}' " +
                     $"was found next to '{property.name}'. Only serialized fields can be a condition.",
                     MessageType.Warning);
 
@@ -48,19 +57,60 @@ namespace Vkaike2.StarterKit.Editor.Drawers
                 return;
             }
 
-            if (IsSatisfied(condition, showIf))
+            switch (visibility)
             {
-                EditorGUI.PropertyField(position, property, label, true);
-                return;
+                case Visibility.Visible:
+                    EditorGUI.PropertyField(position, property, label, true);
+                    break;
+
+                case Visibility.Disabled:
+                    using (new EditorGUI.DisabledScope(true))
+                    {
+                        EditorGUI.PropertyField(position, property, label, true);
+                    }
+
+                    break;
+            }
+        }
+
+        private Visibility Evaluate(SerializedProperty property, out string missingCondition)
+        {
+            missingCondition = null;
+            var visibility = Visibility.Visible;
+
+            foreach (ShowIfAttribute showIf in GetAttributes())
+            {
+                SerializedProperty condition = FindConditionProperty(property, showIf.ConditionName);
+
+                if (condition == null)
+                {
+                    missingCondition ??= showIf.ConditionName;
+                    continue;
+                }
+
+                if (IsSatisfied(condition, showIf)) continue;
+
+                if (showIf.Mode == ShowIfMode.Hide) return Visibility.Hidden;
+
+                visibility = Visibility.Disabled;
             }
 
-            if (showIf.Mode == ShowIfMode.Disable)
-            {
-                using (new EditorGUI.DisabledScope(true))
-                {
-                    EditorGUI.PropertyField(position, property, label, true);
-                }
-            }
+            return visibility;
+        }
+
+        private ShowIfAttribute[] GetAttributes()
+        {
+            if (_attributes != null) return _attributes;
+
+            ShowIfAttribute[] declared = fieldInfo?
+                .GetCustomAttributes<ShowIfAttribute>(true)
+                .ToArray();
+
+            _attributes = declared is { Length: > 0 }
+                ? declared
+                : new[] { (ShowIfAttribute)attribute };
+
+            return _attributes;
         }
 
         private static float HelpBoxHeight() => EditorGUIUtility.singleLineHeight * HelpBoxLines;

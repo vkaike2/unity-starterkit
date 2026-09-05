@@ -1,132 +1,140 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using Vkaike2.StarterKit.Attributes;
 using Vkaike2.StarterKit.Base.Interfaces;
 using Vkaike2.StarterKit.UI;
 
 namespace Vkaike2.StarterKit.Data
 {
-    [CreateAssetMenu(fileName = "load-sequence-01", menuName = "vkaike2/Load Sequence", order = 0)]
+    [CreateAssetMenu(fileName = "So_LoadSequence-01", menuName = "vkaike2/Load Sequence", order = 0)]
     public class LoadSequence : ScriptableObject
     {
         [SerializeField] private bool _useDefaultLoader = true;
         [SerializeField, HideIf(nameof(_useDefaultLoader))] private LoaderUI _loaderUI;
-        [Space]
-        [SerializeField] private List<Entity> _managers = new();
-        [SerializeField] private List<Entity> _entities = new();
+        [field: Space]
+        [field: SerializeField] public List<Entity> Managers { get; private set; } = new();
+        [field: SerializeField] public List<Entity> Entities { get; private set; } = new();
 
         public bool UseDefaultLoader => _useDefaultLoader;
         public LoaderUI LoaderUI => _loaderUI;
 
-        public IEnumerable<ILoadableEntity> GetEntitiesToLoad()
-        {
-            foreach (var entity in _entities)
-            {
-                if (entity == null || !entity.ShouldLoad) continue;
-                if (entity.LoadableEntity == null) continue;
-
-                yield return entity.LoadableEntity;
-            }
-        }
 
         private void OnValidate()
         {
-            for (var index = 0; index < _entities.Count; index++)
+            for (var index = 0; index < Managers.Count; index++)
             {
-                _entities[index]?.IsValid(index, this);
+                Managers[index]?.IsValid(index, this);
+            }
+
+            for (var index = 0; index < Entities.Count; index++)
+            {
+                Entities[index]?.IsValid(index, this);
             }
         }
 
         [Serializable]
-        private class Entity
+        public class Entity
         {
-            [SerializeField] private bool _shouldNotLoad = true;
-            [SerializeField, HideIf(nameof(_shouldNotLoad))] private Type _type;
-            [SerializeField] private UnityEngine.Object _object;
-            [SerializeField] private GameObject _gameObject;
-            [SerializeField] private Scene _scene;
+            [HideInInspector] public string name;
 
-            public bool ShouldLoad => _shouldNotLoad;
+            [SerializeField] private bool _shouldLoad = true;
+            [SerializeField, HideIf(nameof(_shouldLoad), false)] private Type _dataType;
 
-            public ILoadableEntity? LoadableEntity { get; set; }
-            public Scene LoadableScene => _scene;
+            [field: SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_dataType), Type.Scene)]
+            public string ScenePath { get; private set; }
 
-            private const string _emptyElementError = "[{0}] Element {index} of '{1}' is empty.";
-            private const string _nonLoadableEntityError = 
-                "[{0}] Element {1} of '{2}' is '{3}' ({4}), which does not implement {5} and cannot be loaded.";
+            [field: SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_dataType), Type.GameObject)]
+            public GameObject GameObject { get; private set; }
 
-            private ILoadableEntity? GetLoadableEntity()
+            [SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_dataType), Type.Object)]
+            private UnityEngine.Object _object;
+
+            public bool ShouldLoad => _shouldLoad;
+            public Type DataType => _dataType;
+
+
+            public ILoadableEntity? GetLoadableEntity()
             {
-                switch (_type)
-                {
-                    case Type.Scene: return null;
-                    case Type.GameObject: return _gameObject.GetComponent<ILoadableEntity>();
-                    case Type.Object: return _object as ILoadableEntity;
-
-                    default: throw new NotImplementedException();
-                }
+                if(_dataType != Type.Object) return null;
+                return _object as ILoadableEntity;
             }
 
             public bool IsValid(int index, UnityEngine.Object context)
             {
-                switch (_type)
+                name = string.Empty;
+                name = $"[{_dataType}] ";
+                switch (_dataType)
                 {
-                    case Type.Scene: return ValidateScene(index, context);
-                    case Type.GameObject: return ValidateGameObject(index, context);
-                    case Type.Object: return ValidateObject(index, context);
+                    case Type.Scene:
+                        ValidateScene(index, context);
+                        var sceneName = ScenePath.Split('/').Last();
+                        name += ScenePath != null ? $"{sceneName}" : "None";
+                        break;
+                    case Type.GameObject:
+                        ValidateGameObject(index, context);
+                        name += ScenePath != null ? $"{GameObject.name}" : "None";
+                        break;
+                    case Type.Object:
+                        ValidateObject(index, context);
+                        name += ScenePath != null ? $"{_object.name}" : "None";
+                        break;
 
                     default: return false;
                 }
+
+                return true;
             }
 
             private bool ValidateObject(int index, UnityEngine.Object context)
             {
-                if (_object == null)
-                {
-                    Debug.LogError(
-                        string.Format(_emptyElementError, nameof(LoadSequence), context.name),
-                        context);
-
-                    return false;
-                }
+                if (_object == null) return LogEmptyElement(index, context);
 
                 if (_object is ILoadableEntity) return true;
 
+                return LogNotLoadableElement(
+                    index, context, $"'{_object.name}' ({_object.GetType().Name})");
+            }
+
+            private bool ValidateGameObject(int index, UnityEngine.Object context)
+            {
+                if (GameObject == null) return LogEmptyElement(index, context);
+
+                if (GameObject.GetComponent<ILoadableEntity>() != null) return true;
+
+                return LogNotLoadableElement(index, context, $"'{GameObject.name}'");
+            }
+
+            private bool ValidateScene(int index, UnityEngine.Object context)
+            {
+                if (ScenePath == null) return LogEmptyElement(index, context);
+
+                return true;
+            }
+
+            private static bool LogEmptyElement(int index, UnityEngine.Object context)
+            {
+                Debug.LogError(
+                    $"[{nameof(LoadSequence)}] Element {index} of '{context.name}' is empty.",
+                    context);
+
+                return false;
+            }
+
+            private static bool LogNotLoadableElement(
+                int index, UnityEngine.Object context, string elementDescription)
+            {
                 Debug.LogError(
                     $"[{nameof(LoadSequence)}] Element {index} of '{context.name}' is " +
-                    $"'{_object.name}' ({_object.GetType().Name}), which does not implement " +
+                    $"{elementDescription}, which does not implement " +
                     $"{nameof(ILoadableEntity)} and cannot be loaded.",
                     context);
 
                 return false;
             }
 
-            private bool ValidateGameObject(int index, UnityEngine.Object context)
-            {
-                if (_gameObject == null)
-                {
-                    Debug.LogError(
-                        string.Format(_emptyElementError, nameof(LoadSequence), context.name),
-                        context);
-                    return false;
-                }
-
-                if(_gameObject.GetComponent<ILoadableEntity>() != null) return true;
-
-
-
-                return false;
-            }
-
-            private bool ValidateScene(int index, UnityEngine.Object context)
-            {
-
-                return false;
-            }
-
-            private enum Type
+            public enum Type
             {
                 Scene,
                 GameObject,

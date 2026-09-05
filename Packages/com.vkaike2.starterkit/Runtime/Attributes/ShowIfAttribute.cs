@@ -9,7 +9,7 @@ namespace Vkaike2.StarterKit.Attributes
         Disable = 1,
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
+    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true, Inherited = true)]
     public class ShowIfAttribute : PropertyAttribute
     {
         public string ConditionName { get; }
@@ -38,7 +38,7 @@ namespace Vkaike2.StarterKit.Attributes
         }
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false, Inherited = true)]
+    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true, Inherited = true)]
     public class HideIfAttribute : ShowIfAttribute
     {
         public HideIfAttribute(string conditionName)

@@ -1,0 +1,19 @@
+Editor:
+    - Make sure the Main GameObjects looks good in the hierarchy
+
+Managers:
+    - LoadManager
+        - Created @done
+        - Tested
+    - Update Manager 
+        - Created @done
+        - Tested
+    - AudioManager
+    - Settings Manager
+    - Terminal
+UI:
+    - LoadManagerUI @done
+        - Created @done
+    - Terminal UI
+Extensions:
+    - RandomExtension

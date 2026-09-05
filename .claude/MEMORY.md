@@ -85,6 +85,66 @@ screen is black, then call it again to finish.
 Note that if every manager loads synchronously the whole sequence finishes inside one frame. That is
 fine; the cover and uncover animations are what give the screen its dwell time, not the load.
 
+The three stages are modelled as a state machine, not as flags. `LoaderUI` is a `partial` class and
+each state is a private nested class deriving from `BaseState`, in its own
+`Loader/FiniteStates/LoaderUI.{State}.cs` file, one per member of the `LoaderUI.State` enum:
+`Open`, `Closed`, `TransitionToOpen`, `TransitionToClose`.
+
+- **Nested and private** because a state is meaningless outside the loader and needs its serialized
+  fields. `BaseState.Start(parent)` hands it the `LoaderUI`, so the state reaches them through
+  `_parent` rather than through a duplicated set of its own.
+- **One file per state, all `partial LoaderUI`** so a state can grow without turning `LoaderUI.cs`
+  into a scroll, while the nesting keeps them off the public API.
+- The nested class names deliberately shadow nothing: the enum members are only ever reached as
+  `State.Open`, so `Open` the class and `State.Open` the value coexist.
+
+The four states are one loop: `Open -> TransitionToClose -> Closed -> TransitionToOpen -> Open`.
+`Open` means the screen is *exposed* (the loading image is parked off in an opened position and the
+container is off); `Closed` means the image covers the screen. Only the two transitions tick.
+
+- Every `OnEnter` **snaps** the image to where that state says it belongs, even when it is already
+  there. Arriving from a transition makes the snap a no-op, so the same line also serves the case
+  where the state is entered cold as the initial state. That is what removes the boot-time special
+  casing from three of the four states.
+- `LastOpenedPosition` is the memory of where the image sits while open. It is only null on a fresh
+  boot, so `EnsureLastOpenedPosition` (in `BaseState`) rolls a random one, and both `Open` and
+  `TransitionToClose` can be entered first without knowing which of them went first.
+- `TransitionToOpen` rolls a **new** random position every time, so each loading screen leaves in a
+  different direction. `TransitionToClose` deliberately does not roll: the image is already
+  somewhere, and moving it before the transition would be a visible jump.
+- Movement is `anchoredPosition`, not world `position`, because everything lives in one Canvas.
+  `TransitionSpeed` is then in canvas reference-resolution units, so a CanvasScaler keeps the
+  transition the same duration at any resolution. **This requires the loading image and every
+  position marker to share a parent RectTransform** — anchoredPosition is meaningless across
+  different parents or anchors.
+- Arrival is `Vector2.MoveTowards` reaching the target exactly, then `==` (which is Unity's
+  approximate compare). No epsilon of our own, and no overshoot to clamp.
+- `LoaderUI` ticks the current state from its own `Update`, **not** through [[UpdateManager]]. The
+  loader has to run while the managers are still loading, which is precisely when `UpdateManager`
+  cannot be relied on to exist.
+
+`TransitionToClose` does not tick. Its `OnEnter` plays `AnimationClosing` and then polls
+`Animator.IsPlayingAnimation(AnimationClosed)` frame by frame, moving to `Closed` once the controller
+has arrived there by itself. The animator owns the duration, so the closing animation can be
+retimed in Unity without touching a speed or a timer in code, and the state machine never disagrees
+with what is on screen. `Container.SetActive(true)` comes **first**: `PlayAnimation` is a no-op on an
+inactive object, so playing before activating would leave the poll waiting forever.
+
+The poll uses `_parent.destroyCancellationToken`, the same token as the waits in `LoaderUI` itself.
+
+`Open()` is the public verb `LoadManager` calls; it returns `Awaitable` and finishes only once the
+screen is actually exposed, so the caller never has to poll the state itself.
+
+- It waits out a transition **before** deciding what to do, rather than assuming `Closed`. Called
+  mid-`TransitionToClose` it lets the close finish and then reopens; called when already `Open` it
+  returns without a frame of work. Reading the current state and acting on it in the same breath
+  would hang on two of the four states.
+- Waiting is a `while (!IsState(...)) await Awaitable.NextFrameAsync(destroyCancellationToken)`
+  poll. The states already publish everything through `IsState`, so an event or a completion source
+  per transition would be a second source of truth to keep in sync for no gain at this size.
+- The token is the MonoBehaviour's own `destroyCancellationToken`, so tearing the loader down
+  cancels the await instead of leaving it resuming against a dead object.
+
 ---
 
 ## Update dispatch
@@ -112,6 +172,37 @@ ascending order value, and in registration order within the same value.
 
 ---
 
+## Extensions
+
+### AnimatorExtension
+
+Lives in `Vkaike2.StarterKit.Base.Extensions` like every other extension — the namespace mirrors
+the folder. Both helpers are null- and inactive-safe, because an animator on a disabled container is
+the normal case for the loader, not an error.
+
+`IsPlayingAnimation` reads `GetCurrentAnimatorStateInfo(layer).IsName(name)`, so the string is the
+**Animator state name**, the same string `Play` takes — not the clip name. The two differ the moment
+a state is renamed in the controller.
+
+It returns `false` while `IsInTransition(layer)`. During a blend, `GetCurrentAnimatorStateInfo` still
+reports the state being left, so a caller waiting for the *next* state would otherwise see it arrive
+one blend early. Waiting for the transition to settle is the honest answer to "is it playing this".
+
+### RandomExtensions
+
+`List<T>.GetRandom()` picks one element with `UnityEngine.Random`, not `System.Random`, so a game
+that seeds Unity's generator gets a reproducible pick out of it for free.
+
+It **throws** on null and on empty rather than returning `default`. A `default` here is silent: it
+is a real element for a value type and a null the caller blames on the list's contents, so the bad
+call site stays hidden. `ArgumentNullException` for null and `InvalidOperationException` for empty
+follow the BCL split — an empty list is a valid argument, just not one you can pick from.
+
+Deliberately typed on `List<T>` and not `IReadOnlyList<T>`: widening it later is a source-compatible
+change, narrowing it is not.
+
+---
+
 ## Editor
 
 ### ShowIf / HideIf
@@ -135,11 +226,29 @@ from jumping around.
 
 [SerializeField] private LoadMode _mode;
 [SerializeField, ShowIf(nameof(_mode), LoadMode.Async)] private float _timeout;
+
+[SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_type), Type.Scene)]
+private Scene _scene;
 ```
+
+Both attributes are `AllowMultiple = true`, and stacking them **ANDs** the conditions: the field
+shows only when every one of them is satisfied. `ShowIf` and `HideIf` mix freely in a stack, since
+each one contributes a satisfied/not-satisfied answer and nothing more. AND was chosen over OR
+because "this field belongs to this state" is what the inspector is almost always expressing; an OR
+is still reachable by pointing all the stacked attributes at one derived bool field.
 
 ### ShowIfDrawer
 
 Registered with `useForChildren: true`, so the one drawer serves both attributes on any type.
+
+Unity hands a drawer only **one** `attribute`, so the stack is read off `fieldInfo` instead and
+cached on the drawer instance. `attribute` is still the fallback for the case where `fieldInfo` is
+missing. Unity builds a single handler per field even with several `PropertyAttribute`s on it, so
+the drawer runs once and draws the field once.
+
+A stack that is not satisfied hides the field if any unsatisfied attribute is `Mode.Hide`, and only
+greys it out when every unsatisfied one is `Mode.Disable` — hiding wins, because a field the author
+declared invisible for a state must not appear in it.
 
 - When the condition cannot be resolved the field is drawn **anyway**, above a warning help box
   naming the missing field. A typo must be loud, never a silently invisible field.
@@ -155,6 +264,41 @@ Registered with `useForChildren: true`, so the one drawer serves both attributes
 - `FindConditionProperty` resolves siblings via the property path, so the attribute also works inside
   a nested serializable class. A list element path ends in `.Array.data[i]`, whose parent is the list
   itself and holds no sibling fields, so that case falls back to the root object.
+
+### HierarchyPainter
+
+Colours rows in the **Hierarchy** window by name — a `GameObject` whose name contains `Manager`
+gets a dark blue row, `Canvas` a red one, both with white text. It hangs off the
+hierarchy's per-item GUI callback via `[InitializeOnLoad]`, so it needs no asset and no scene
+object; the callback is unsubscribed before subscribing because a domain reload re-runs the static
+constructor while the old delegate may still be registered.
+
+Rules live in one `List<HierarchyPaintRule>` — keyword, background, text colour — matched
+case-insensitively with `IndexOf`, first match wins. Adding a colour is a line in that list.
+
+- The callback only runs on `EventType.Repaint`. Drawing on the layout/mouse events would fight the
+  hierarchy's own hit-testing and swallow clicks.
+- Unity draws the row **before** this callback, so the row is repainted over and everything the
+  fill covered — icon and name — has to be re-drawn on top. The fill is exactly `selectionRect` and
+  is **never widened leftwards**: `selectionRect` begins to the right of the foldout arrow, so any
+  negative x offset paints over the expand arrow and the object can no longer be unfolded.
+- The icon is re-drawn from `EditorGUIUtility.ObjectContent(gameObject, typeof(GameObject)).image`,
+  which is the same icon Unity used (custom icon, prefab variant icon, and so on) rather than a
+  guessed one. The label is then offset by `IconSize + LabelLeftPadding` to land where Unity had it.
+- Painting over the row also erases Unity's selection tint, so a selected row lerps its background
+  toward white to keep the selection legible. Inactive objects lerp their *text* toward the
+  background and draw their icon at a lower alpha, standing in for the greying-out that was painted
+  over.
+- `GUIStyle` is built lazily, not in a static field initialiser. `EditorStyles` is not populated
+  when `[InitializeOnLoad]` runs during a domain reload, and touching it there throws.
+- 6000.5 made `EditorApplication.hierarchyWindowItemOnGUI` obsolete-as-**error** (CS0619) in favour
+  of `hierarchyWindowItemByEntityIdOnGUI`, whose callback takes a `UnityEngine.EntityId` instead of
+  an int instance id. `package.json` still declares `6000.0`, so both are kept behind
+  `#if UNITY_6000_5_OR_NEWER` — the new symbol does not exist on 6000.0–6000.4. Each branch does
+  nothing but resolve the id to a `GameObject` and hand it to the shared `Paint`.
+- Selection is tested with `Selection.Contains(gameObject)` rather than searching
+  `Selection.instanceIDs` / `Selection.entityIds`. The `Object` overload exists on both versions,
+  so the version split stays confined to the two callbacks.
 
 ---
 
