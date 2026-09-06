@@ -11,6 +11,7 @@ namespace Vkaike2.StarterKit.Editor.Drawers
     public class ShowIfDrawer : PropertyDrawer
     {
         private const float HelpBoxLines = 2f;
+        private const float HeaderLines = 1.5f;
 
         private enum Visibility
         {
@@ -20,6 +21,7 @@ namespace Vkaike2.StarterKit.Editor.Drawers
         }
 
         private ShowIfAttribute[] _attributes;
+        private GUIContent _headerContent;
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
@@ -27,7 +29,7 @@ namespace Vkaike2.StarterKit.Editor.Drawers
 
             if (missingCondition != null)
             {
-                return HelpBoxHeight() + EditorGUIUtility.standardVerticalSpacing +
+                return DecorationHeight() + HelpBoxHeight() + EditorGUIUtility.standardVerticalSpacing +
                        EditorGUI.GetPropertyHeight(property, label, true);
             }
 
@@ -36,12 +38,17 @@ namespace Vkaike2.StarterKit.Editor.Drawers
                 return -EditorGUIUtility.standardVerticalSpacing;
             }
 
-            return EditorGUI.GetPropertyHeight(property, label, true);
+            return DecorationHeight() + EditorGUI.GetPropertyHeight(property, label, true);
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
             Visibility visibility = Evaluate(property, out string missingCondition);
+
+            if (missingCondition == null && visibility == Visibility.Hidden) return;
+
+            label = new GUIContent(label);
+            position.yMin += DrawDecoration(position);
 
             if (missingCondition != null)
             {
@@ -111,6 +118,42 @@ namespace Vkaike2.StarterKit.Editor.Drawers
                 : new[] { (ShowIfAttribute)attribute };
 
             return _attributes;
+        }
+
+        private ShowIfAttribute GetDecoration()
+        {
+            return GetAttributes()
+                .FirstOrDefault(showIf => !string.IsNullOrEmpty(showIf.Header) || showIf.SpaceBefore > 0f);
+        }
+
+        private float DecorationHeight()
+        {
+            ShowIfAttribute decoration = GetDecoration();
+
+            if (decoration == null) return 0f;
+
+            return decoration.SpaceBefore + (string.IsNullOrEmpty(decoration.Header)
+                ? 0f
+                : EditorGUIUtility.singleLineHeight * HeaderLines);
+        }
+
+        private float DrawDecoration(Rect position)
+        {
+            ShowIfAttribute decoration = GetDecoration();
+            float height = DecorationHeight();
+
+            if (decoration == null || string.IsNullOrEmpty(decoration.Header)) return height;
+
+            var headerRect = new Rect(
+                position.x,
+                position.y + decoration.SpaceBefore + EditorGUIUtility.singleLineHeight * (HeaderLines - 1f),
+                position.width,
+                EditorGUIUtility.singleLineHeight);
+
+            _headerContent ??= new GUIContent(decoration.Header);
+            EditorGUI.LabelField(headerRect, _headerContent, EditorStyles.boldLabel);
+
+            return height;
         }
 
         private static float HelpBoxHeight() => EditorGUIUtility.singleLineHeight * HelpBoxLines;

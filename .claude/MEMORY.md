@@ -231,6 +231,24 @@ from jumping around.
 private Scene _scene;
 ```
 
+`Header` and `SpaceBefore` are optional named arguments that draw a bold label and/or blank space
+above the field, and **disappear with it**:
+
+```csharp
+[SerializeField, HideIf(nameof(_isActive), false, Header = "Configurations", SpaceBefore = 8f)]
+private bool _useDefaultLoader = true;
+```
+
+They exist because Unity's `[Header]` and `[Space]` are `DecoratorDrawer`s, and a decorator is never
+handed the `SerializedProperty` — it cannot read the condition, and Unity draws it *before* the
+property drawer gets its rect. So a `[Header]` above a conditionally hidden field stays on screen,
+titling nothing. Moving the header into the attribute puts it back in the one place that can see the
+condition. Attributes on a bare `[Header(...)]` line also bind to the next field anyway, so
+`[Header("X"), HideIf(...)]` on its own line was never anything but a duplicate of the field below.
+
+The header block is `singleLineHeight * 1.5` with the label in its lower line, matching Unity's own
+`HeaderDrawer` so the spacing is indistinguishable from a real `[Header]`.
+
 Both attributes are `AllowMultiple = true`, and stacking them **ANDs** the conditions: the field
 shows only when every one of them is satisfied. `ShowIf` and `HideIf` mix freely in a stack, since
 each one contributes a satisfied/not-satisfied answer and nothing more. AND was chosen over OR
@@ -261,6 +279,15 @@ declared invisible for a state must not appear in it.
   the enum type is not visible from the declaring assembly. Matching by value reads `longValue`, not
   `enumValueIndex` — the index is a position in the name list and is wrong for any enum whose members
   are not numbered `0..n`.
+- The header is drawn through a **cached `GUIContent`**, never through the `string` overload, and
+  `label` is **copied** before anything is drawn above the field. Unity's implicit `string` →
+  `GUIContent` conversion hands back the shared temp content, which is the very instance Unity passed
+  in as `label` — drawing the header by string retitles the field with the header text. The copy
+  covers the help-box path for the same reason.
+- The `Header` / `SpaceBefore` decoration is taken from the **first** attribute in the stack that
+  declares either, so a field with several stacked conditions carries its header only once. Its
+  height is added in both `GetPropertyHeight` and `OnGUI`, and contributed by neither when the field
+  is hidden. It is still drawn above the missing-condition help box, since that path draws the field.
 - `FindConditionProperty` resolves siblings via the property path, so the attribute also works inside
   a nested serializable class. A list element path ends in `.Array.data[i]`, whose parent is the list
   itself and holds no sibling fields, so that case falls back to the root object.

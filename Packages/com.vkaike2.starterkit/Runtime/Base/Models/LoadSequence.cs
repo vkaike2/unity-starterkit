@@ -6,32 +6,47 @@ using Vkaike2.StarterKit.Attributes;
 using Vkaike2.StarterKit.Base.Interfaces;
 using Vkaike2.StarterKit.UI;
 
-namespace Vkaike2.StarterKit.Data
+namespace Vkaike2.StarterKit.Base.Models
 {
-    [CreateAssetMenu(fileName = "So_LoadSequence-01", menuName = "vkaike2/Load Sequence", order = 0)]
-    public class LoadSequence : ScriptableObject
+    [Serializable]
+    public class LoadSequence
     {
-        [SerializeField] private bool _useDefaultLoader = true;
-        [SerializeField, HideIf(nameof(_useDefaultLoader))] private LoaderUI _loaderUI;
-        [field: Space]
-        [field: SerializeField] public List<Entity> Managers { get; private set; } = new();
-        [field: SerializeField] public List<Entity> Entities { get; private set; } = new();
+        [SerializeField] private string _name;
+        [SerializeField] private bool _isActive = true;
+
+        [SerializeField, HideIf(nameof(_isActive), false, Header = "Configurations")]
+        private bool _useDefaultLoader = true;
+        [SerializeField, HideIf(nameof(_useDefaultLoader)), HideIf(nameof(_isActive), false)] private LoaderUI _loaderUI;
+        [SerializeField, HideIf(nameof(_isActive), false)] private EntitiesWrapper _loadableEntities;
+
+
+        public bool IsActive { get; set; }
+        public string Name => _name;
 
         public bool UseDefaultLoader => _useDefaultLoader;
         public LoaderUI LoaderUI => _loaderUI;
+        public List<Entity> Managers => _loadableEntities.Managers;
+        public List<Entity> Entities => _loadableEntities.Entities;
 
 
-        private void OnValidate()
+        public void IsValid(UnityEngine.Object context)
         {
-            for (var index = 0; index < Managers.Count; index++)
+            for (var index = 0; index < _loadableEntities.Managers.Count; index++)
             {
-                Managers[index]?.IsValid(index, this);
+                _loadableEntities.Managers[index]?.IsValid(index, context);
             }
 
-            for (var index = 0; index < Entities.Count; index++)
+            for (var index = 0; index < _loadableEntities.Entities.Count; index++)
             {
-                Entities[index]?.IsValid(index, this);
+                _loadableEntities.Entities[index]?.IsValid(index, context);
             }
+        }
+
+        [Serializable]
+        public class EntitiesWrapper
+        {
+            [field: SerializeField] public List<Entity> Managers { get; private set; }
+            [field: SerializeField] public List<Entity> Entities { get; private set; }
         }
 
         [Serializable]
@@ -57,7 +72,7 @@ namespace Vkaike2.StarterKit.Data
 
             public ILoadableEntity? GetLoadableEntity()
             {
-                if(_dataType != Type.Object) return null;
+                if (_dataType != Type.Object) return null;
                 return _object as ILoadableEntity;
             }
 
@@ -123,7 +138,9 @@ namespace Vkaike2.StarterKit.Data
             }
 
             private static bool LogNotLoadableElement(
-                int index, UnityEngine.Object context, string elementDescription)
+                int index,
+                UnityEngine.Object context,
+                string elementDescription)
             {
                 Debug.LogError(
                     $"[{nameof(LoadSequence)}] Element {index} of '{context.name}' is " +

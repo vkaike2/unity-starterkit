@@ -20,6 +20,10 @@ namespace Vkaike2.StarterKit.Attributes
 
         public ShowIfMode Mode { get; set; } = ShowIfMode.Hide;
 
+        public string Header { get; set; }
+
+        public float SpaceBefore { get; set; }
+
         public ShowIfAttribute(string conditionName)
             : this(conditionName, null, false)
         {

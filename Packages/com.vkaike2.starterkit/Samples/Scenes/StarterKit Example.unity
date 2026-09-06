@@ -164,9 +164,28 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Vkaike2.StarterKit::Vkaike2.StarterKit.Managers.LoadManager
   _configurations:
-    <TestSequence>k__BackingField: {fileID: 11400000, guid: 1e8d8da926e85524b9bc98074ce6125b, type: 2}
+    <TestSequence>k__BackingField:
+    - _name: Load Sequence
+      _isActive: 1
+      _useDefaultLoader: 0
+      _loaderUI: {fileID: 0}
+      _loadableEntities:
+        <Managers>k__BackingField:
+        - name: '[GameObject] UpdateManager'
+          _shouldLoad: 1
+          _dataType: 1
+          <ScenePath>k__BackingField: 
+          <GameObject>k__BackingField: {fileID: 17263912167297300, guid: a42cc51f7a2146e46a4d2c197119bd64, type: 3}
+          _object: {fileID: 0}
+        <Entities>k__BackingField: []
     <Sequences>k__BackingField:
-    - {fileID: 0}
+    - _name: 
+      _isActive: 1
+      _useDefaultLoader: 1
+      _loaderUI: {fileID: 0}
+      _loadableEntities:
+        <Managers>k__BackingField: []
+        <Entities>k__BackingField: []
   _components:
     <DefaultLoader>k__BackingField: {fileID: 2121471231}
 --- !u!1 &1844211717
