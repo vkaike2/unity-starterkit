@@ -27,7 +27,8 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
 
         private void OnValidate()
         {
-            _configurations.ValidateSequences(this);
+            _configurations.ValidateFields(this);
+            _components.ValidateFields(this);
         }
 
         private async void Start()
@@ -103,27 +104,31 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
 
         //we need to be able to register a load sequence
         [Serializable]
-        private class Configurations
+        private class Configurations : ValidatableFields
         {
 #if DEBUG
             [field: SerializeField] public List<LoadSequence> TestSequence { get; set; }
 #endif
             [field: SerializeField] public List<LoadSequence> Sequences { get; set; }
 
-
-            public void ValidateSequences(UnityEngine.Object context)
+            protected override void Validate()
             {
 #if DEBUG
-                SequenceRunner.ValidateSequences(TestSequence, context);
+                SequenceRunner.ValidateSequences(TestSequence, Context);
 #endif
-                SequenceRunner.ValidateSequences(Sequences, context);
+                SequenceRunner.ValidateSequences(Sequences, Context);
             }
         }
 
         [Serializable]
-        private class Components
+        private class Components : ValidatableFields
         {
             [field: SerializeField] public LoaderUI DefaultLoader { get; set; }
+
+            protected override void Validate()
+            {
+                ValidateNull(DefaultLoader, nameof(DefaultLoader));
+            }
         }
     }
 }

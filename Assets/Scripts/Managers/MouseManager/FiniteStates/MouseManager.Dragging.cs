@@ -1,3 +1,5 @@
+using Scripts.Enums;
+
 namespace Scripts.Managers
 {
     public partial class MouseManager
@@ -12,10 +14,17 @@ namespace Scripts.Managers
 
             public override void OnExit()
             {
+                _parent._currentInteractable = null;
             }
 
-            public override void Update()
+            public override void OnLeftMouseButton(InteractionState interactionState)
             {
+                if (interactionState != InteractionState.Released) return;
+
+                _parent._currentInteractable?
+                    .OnInteraction(InteractionType.LeftMouseButton, interactionState);
+
+                _parent.ChangeState(State.Idle);
             }
         }
     }

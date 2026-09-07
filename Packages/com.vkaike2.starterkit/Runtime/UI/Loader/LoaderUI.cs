@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Vkaike2.StarterKit.Attributes;
+using Vkaike2.StarterKit.Base.Abstracts;
 using Vkaike2.StarterKit.Base.Extensions;
 
 namespace Vkaike2.StarterKit.UI
@@ -24,6 +25,12 @@ namespace Vkaike2.StarterKit.UI
         };
 
         private bool _statesAreStarted = false;
+
+        private void OnValidate()
+        {
+            _configurations.ValidateFields(this);
+            _components.ValidateFields(this);
+        }
 
         public bool IsState(State state)
         {
@@ -104,7 +111,7 @@ namespace Vkaike2.StarterKit.UI
         }
 
         [Serializable]
-        private class Configurations
+        private class Configurations : ValidatableFields
         {
             [field: SerializeField] public List<Sprite> Images { get; set; }
 
@@ -145,11 +152,17 @@ namespace Vkaike2.StarterKit.UI
 
         }
         [Serializable]
-        private class Components
+        private class Components : ValidatableFields
         {
             [field: SerializeField] public Image Image { get; private set; }
             [field: SerializeField] public GameObject Container { get; private set; }
             [field: SerializeField] public Animator Animator { get; set; }
+
+            protected override void Validate()
+            {
+                ValidateNull(Container, nameof(Container));
+                ValidateNull(Animator, nameof(Animator));
+            }
         }
     }
 }

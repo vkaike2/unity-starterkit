@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Scripts.Enums;
+using Scripts.Interfaces;
 using UnityEngine;
 using Vkaike2.StarterKit.Base.Abstracts;
 using Vkaike2.StarterKit.Enums;
@@ -15,6 +16,10 @@ namespace Scripts.Managers
         [SerializeField] private Components _components;
 
         private BaseState _currentState;
+
+        private IInteractableEntity _currentInteractable;
+
+        private Camera _camera;
 
         private readonly List<BaseState> _allStates = new()
         {
@@ -30,6 +35,12 @@ namespace Scripts.Managers
             return _currentState.State == state;
         }
 
+        private void OnValidate()
+        {
+            _configurations.ValidateFields(this);
+            _components.ValidateFields(this);
+        }
+
         protected override async Awaitable OnLoad()
         {
             UpdateManager.Instance.Register(
@@ -37,12 +48,41 @@ namespace Scripts.Managers
                 UpdateOrder.Managers,
                 MyUpdate);
 
+            InputManager.Instance.OnLeftMouseButton += HandleLeftMouseButton;
+
+            _camera = Camera.main;
+
             ChangeState(State.Idle);
+        }
+
+        protected override void OnDestroy()
+        {
+            if (UpdateManager.HasInstance)
+            {
+                UpdateManager.Instance.Unregister(MyUpdate);
+            }
+
+            if (InputManager.HasInstance)
+            {
+                InputManager.Instance.OnLeftMouseButton -= HandleLeftMouseButton;
+            }
+
+            base.OnDestroy();
         }
 
         private void MyUpdate()
         {
             _currentState?.Update();
+        }
+
+        private Vector2 GetMouseWorldPosition()
+        {
+            return _camera.ScreenToWorldPoint(InputManager.Instance.MouseScreenPosition);
+        }
+
+        private void HandleLeftMouseButton(InteractionState interactionState)
+        {
+            _currentState?.OnLeftMouseButton(interactionState);
         }
 
         private void TryToStartAllStates()
@@ -74,13 +114,13 @@ namespace Scripts.Managers
         }
 
         [Serializable]
-        private class Configurations
+        private class Configurations : ValidatableFields
         {
 
         }
 
         [Serializable]
-        private class Components
+        private class Components : ValidatableFields
         {
         }
     }

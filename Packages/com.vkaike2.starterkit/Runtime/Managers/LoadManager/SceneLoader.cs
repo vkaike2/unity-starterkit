@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Vkaike2.StarterKit.Base.Abstracts;
 using Vkaike2.StarterKit.Base.Interfaces;
 using Vkaike2.StarterKit.Base.Models;
 using Vkaike2.StarterKit.Managers.LoadManager.Base;
@@ -18,7 +19,7 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
 
         private void OnValidate()
         {
-            _configurations.ValidateSequences(this);
+            _configurations.ValidateFields(this);
         }
 
         public async Awaitable Load()
@@ -32,13 +33,13 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
         }
 
         [Serializable]
-        private class Configurations
+        private class Configurations : ValidatableFields
         {
             [field: SerializeField] public List<LoadSequence> Sequences { get; set; }
 
-            public void ValidateSequences(UnityEngine.Object context)
+            protected override void Validate()
             {
-                SequenceRunner.ValidateSequences(Sequences, context);
+                SequenceRunner.ValidateSequences(Sequences, Context);
             }
         }
     }

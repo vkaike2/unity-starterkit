@@ -149,8 +149,8 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 588830847}
   - {fileID: 1316124116}
+  - {fileID: 588830847}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &283117543
@@ -167,19 +167,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Vkaike2.StarterKit::Vkaike2.StarterKit.Managers.LoadManager.SceneLoader
   _configurations:
     <Sequences>k__BackingField:
-    - _name: Gamplay Loader
+    - _name: Game Managers Loader
       _isActive: 1
       _useDefaultLoader: 1
       _loaderUI: {fileID: 0}
       _entities:
         <LoadableEntities>k__BackingField:
-        - name: '[Object] MouseManager'
-          _shouldLoad: 1
-          _dataType: 2
-          <ScenePath>k__BackingField: 
-          <GameObject>k__BackingField: {fileID: 0}
-          <Parent>k__BackingField: {fileID: 0}
-          _object: {fileID: 588830846}
         - name: '[Object] InputManager'
           _shouldLoad: 1
           _dataType: 2
@@ -187,6 +180,13 @@ MonoBehaviour:
           <GameObject>k__BackingField: {fileID: 0}
           <Parent>k__BackingField: {fileID: 0}
           _object: {fileID: 1316124117}
+        - name: '[Object] MouseManager'
+          _shouldLoad: 1
+          _dataType: 2
+          <ScenePath>k__BackingField: 
+          <GameObject>k__BackingField: {fileID: 0}
+          <Parent>k__BackingField: {fileID: 0}
+          _object: {fileID: 588830846}
 --- !u!1 &588830845
 GameObject:
   m_ObjectHideFlags: 0
@@ -275,6 +275,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 34d64dc8230a87e45825898e1d15f067, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scripts.Managers.InputManager
+  _components:
+    _leftMouseButtonAction: {fileID: -523950167283009679, guid: 24860fc7882b5fd4db16481e268ef942, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

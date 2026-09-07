@@ -433,6 +433,70 @@ case-insensitively with `IndexOf`, first match wins. Adding a colour is a line i
 
 ---
 
+## Inspector validation
+
+### ValidatableFields
+
+A base class for the nested `Components` / `Configurations` classes. The nested class lists its
+required references in one `Validate()` override; the host MonoBehaviour's `OnValidate` is a single
+call, `_components.ValidateFields(this)`.
+
+- The owner is handed over **once** through `ValidateFields(context)` and stashed as `Context`, so
+  `ValidateNull(field, nameof(field))` stays two arguments. Passing the context to every call was
+  the duplication worth removing — there is one line per field and nothing else. `Context` is
+  `protected` because a derived `Validate()` sometimes needs it for a check of its own, the way
+  `LoadManager.Configurations` passes it to `SequenceRunner.ValidateSequences`.
+- `Validate()` is **virtual with an empty body**, not abstract. Every `Components` and
+  `Configurations` in the project extends the base, and several have nothing to check yet; an
+  abstract method would make each of those carry an empty override. Extending costs one word, and
+  the class is then ready the moment a field is added.
+- Every MonoBehaviour with these nested classes calls both in `OnValidate` —
+  `_configurations.ValidateFields(this)` then `_components.ValidateFields(this)`. `LoadManager` and
+  `SceneLoader` used to have a bespoke `ValidateSequences(context)` on their `Configurations`; that
+  is now the `Validate()` override, so there is one entry point per nested class rather than one per
+  kind of check.
+- Not every serialized reference is validated. `LoaderUI.Components.Image` is left out because
+  nothing reads it — validating a field the code never uses would demand an assignment for no
+  reason. Optional-by-design references are the general case of this, and the base has no way to
+  express one; leaving the `ValidateNull` line out is how a field is declared optional.
+- The parameter is `UnityEngine.Object`, not `object`, and that is the whole point: Unity overloads
+  `==` so a *missing* or *destroyed* reference compares equal to null. A plain `object` check would
+  call the wrong equality and pass a broken reference as valid.
+- `Debug.LogError` is given the context object, so clicking the console entry selects the offending
+  GameObject. The message names the owning type, the object, and the field, because a bare
+  "unassigned reference" in a scene of many objects is not actionable.
+- Validation is **not** a load-time guard. `OnValidate` is editor-only, so this catches an
+  unassigned field while authoring; a missing reference still throws a plain
+  `NullReferenceException` at runtime. That is the trade taken deliberately — the runtime path stays
+  free of null checks, see [Loading an entity](#loading-an-entity) for the same reasoning about what
+  is worth checking twice.
+- The class lives in the package because it knows nothing about any game; only the fields it is
+  pointed at are game-specific.
+
+---
+
+## Utils
+
+### RayCastUtils
+
+`GetComponentsAtPosition<T>(Vector2 worldPosition)` returns every `T` sitting at a world point.
+Written for picking whatever is under the cursor without the caller knowing about colliders.
+
+- `where T : class`, so `T` can be an interface — the whole point is asking for a *contract*
+  (`IInteractableEntity`) rather than a concrete component.
+- It searches **parents and children** of each hit collider, not the collider's own GameObject. A
+  collider is usually a child of the thing that owns the behaviour, or a parent of the art; either
+  way the component answering for the object is rarely on the collider itself.
+- Results are de-duplicated through a `HashSet`. Overlapping colliders on one hierarchy, and the
+  parent/children sweeps overlapping each other, both return the same component twice.
+- **2D only** (`Physics2D.RaycastAll` with a zero direction, which is how the Input System-era
+  point query is spelled). A 3D sibling is the obvious extension but is deliberately not written
+  until a 3D game needs it.
+- Position is a **world** position. Screen-to-world is the caller's job, since only the caller knows
+  which camera it means.
+
+---
+
 ## Packaging
 
 ### Samples~
@@ -525,6 +589,119 @@ ever comes, gets its own action and its own event — not a second binding on th
 - Actions are enabled in `OnLoad` and disabled in `OnDestroy`, since `Awake` does nothing anywhere
   in this project — see [Singleton](#singleton).
 
+### Board, BoardTile and MapManager
+
+**The board is scene objects, not tilemap data.** `Board` holds one `BoardTile` GameObject per cell;
+`MapManager` reaches the board through `Components.Board` and exposes it to the rest of the game.
+The `Tilemap` is gone from `MapManager` entirely.
+
+Why the tilemap lost the board:
+
+- The logical grid is now independent of the art. Tile coordinates came from the paint's `Grid`
+  origin, so `(0,0)` was wherever the artist started — `(-4,-4)..(1,1)` in the 6x6 scene, with no
+  corner at the origin. Own objects mean own origin.
+- The tiles are isometric **boxes**, so their sprites overlap their neighbours. The overlap is only
+  in the art: the top face is a diamond and diamonds tile the plane exactly, so a per-cell collider
+  on the *top-face diamond* resolves a point to exactly one cell. A `TilemapCollider2D` is one
+  collider for the whole map and cannot do that.
+- Those boxes need per-tile draw order (`sortingOrder` from the coordinate, front-most being the
+  largest `x + y`), which is a `SpriteRenderer` per cell.
+
+A `Tilemap` is still the right tool for static decorative map art. It just is not the board.
+
+- `Board.Initialize()` **generates** the board: it destroys every child, then instantiates
+  `Components.BoardTile` (a prefab) once per cell. Nothing is authored in the scene, so there are no
+  36 transforms to keep in step and no coordinates to type in — the misnumbering the tilemap origin
+  caused cannot come back. It is called from `MapManager.OnLoad`, keeping the manager the one entry
+  point for map questions.
+- `BoardTile.Coordinate` is `Vector2Int` behind `Initialize(coordinate)`, not a serialized field.
+  `Vector2Int` and not `Vector2` because coordinates are looked up by equality, and integer
+  equality is exact.
+- `BoardTile.Initialize` also paints the tile: `(x + y) % 2` picks between the `Normal` and
+  `Alternated` sprites, which is what gives the board its checkerboard. The parity of the *sum* is
+  the whole trick — it flips on every step in either direction, so no neighbour ever shares a
+  colour. The same `x + y` will later give the draw order, since both are asking the same question
+  about a diagonal.
+- The tile paints itself rather than the board painting it. `Board` decides *where* a tile goes and
+  *what* its coordinate is; everything that follows from the coordinate belongs to the tile.
+- **The centre cell sits on the board's own origin.** `center` is `(Size - one) / 2`, so a 6x6 board
+  centres on `(2, 2)` (there is no true middle cell on an even board; this picks the lower-left of
+  the four) and an odd board centres exactly. Every tile is then placed at the offset from that
+  cell, which means moving the `Board` GameObject moves the whole board and the coordinates never
+  change.
+- Placement is the isometric formula spelled out — `x' = (dx - dy) * cellWidth / 2`,
+  `y' = (dx + dy) * cellHeight / 2` — not a `Grid` component. A `Grid` would do the same maths, but
+  it is another required reference whose `Cell Layout` has to be set to Isometric or the board comes
+  out silently rectangular. The board deliberately owns its own geometry now.
+- `CellSize` defaults to `(1, 0.5)`: the tile's **top face** is 32x16 px at 32 pixels per unit. It
+  is the top face that matters, not the sprite — the sprites are isometric boxes and overlap their
+  neighbours, while the top-face diamonds tile the plane exactly.
+- `Size` and `CellSize` are serialized with initializers rather than being consts, so the board can
+  be resized without touching code. Both are visible in the inspector, which is what makes that
+  safe: a field added to an already-serialized component can deserialize to zero, and a `(0,0)`
+  board is obvious on sight.
+
+**Open, deliberately unwritten:** the top-face `PolygonCollider2D` on the prefab, and
+`sortingOrder` from the coordinate (front-most is the largest `x + y`) so the boxes layer correctly.
+`BoardTile.Components` is empty until those are decided. `Initialize` uses `Destroy`, so it is a
+play-mode operation; previewing the board from an editor `[Button]` would need `DestroyImmediate`.
+
+---
+
+### IInteractableEntity
+
+The contract the `MouseManager` states will speak to: `Priority`, `CanInteract()`,
+`OnInteraction(InteractionType, InteractionState)`. `PlayerEntity` is the first implementer.
+
+- `Priority` is typed **`InteractionPriority`**, not `int`. `UpdateManager.Register` takes a raw
+  `int` because it lives in the package and cannot know the game's order enum
+  ([Update dispatch](#update-dispatch)); this interface is game-side, so the enum is right there and
+  the weaker type buys nothing. Every interactable is ranked on one scale by design — two entities
+  under the cursor have to be comparable. Leave gaps between values.
+- `CanInteract()` is a **method, not a property**, because the answer depends on the entity's state
+  at the moment it is asked, not on stored data. A property reads like a cached flag.
+- `InteractionState` lives in `Scripts.Enums`, not nested in `InputManager` as `ClickState`. Both
+  the input side and the interaction side name the same two edges, and a nested enum would have made
+  every interactable depend on the input manager to describe itself.
+
+### PlayerEntity
+
+A finite state machine over `Idle` / `Dragging`, built exactly like [MouseManager](#mousemanager) —
+`partial class`, `Base/` for the shared state, `FiniteStates/` one file per state — and the first
+`IInteractableEntity`.
+
+- Its tick is `OnFixedUpdate`, not `Update`: the entity registers for
+  `UpdateType.FixedUpdate` / `UpdateOrder.Entities`, so its states move a body on the physics clock
+  while `MouseManager`'s read input on the frame clock. The two machines are deliberately not on the
+  same channel, and the base method is named after the channel it is driven by so no state is
+  confused about which one it is on.
+- `OnEnter` / `OnExit` are abstract, `OnFixedUpdate` virtual and empty — same split as
+  `MouseManager.BaseState`, same reason.
+- `Components.DraggingPosition` is exposed as `{ get; private set; }` over a
+  `[field: SerializeField]` backing field. A true get-only auto-property makes that field
+  `readonly`, which the Unity serializer should not be asked to write into.
+- `Components` holds two transforms with different jobs: `ArtPosition` is what actually moves,
+  `DraggingPosition` is where it goes while dragged. The entity's own transform never moves, so the
+  collider that made it pickable stays where it was.
+- `_initialPosition` is captured in `BaseState.Start`, before any `OnEnter` has run, and is what
+  `Idle` returns the art to. It lives on `BaseState` rather than on the entity because it is only
+  ever read by states.
+- The entity does not listen for input. `MouseManager` decides who was picked and calls
+  `OnInteraction`, which is the only thing that drives this machine. That keeps the priority
+  arbitration in one place instead of every interactable racing to claim the same click.
+- `Components` carries three transforms, each answering a different question: `ArtPosition` is what
+  moves, `DraggingPosition` where it goes while dragged, `GroundPosition` the point that actually
+  touches the tile. The last one exists because the art's own origin is not on the ground on an
+  isometric map — a sprite pivots somewhere up its body, and asking the tilemap about *that* point
+  returns the wrong cell.
+- `_currentTile` is commented out. It used to resolve from `GroundPosition` against the tilemap;
+  the board replaced the tilemap, so it is waiting on `BoardTile` coordinates before it can be
+  written against the new lookup.
+- `Load` dereferences `MapManager.Instance`, so **`MapManager` has to load before `PlayerEntity`**
+  in the `LoadManager` sequence, and its tiles have to be built before the entity asks for one.
+
+---
+
 ### MouseManager
 
 A finite state machine over `Idle` / `Dragging`, built as a `partial class` split the same way
@@ -532,10 +709,33 @@ A finite state machine over `Idle` / `Dragging`, built as a `partial class` spli
 file per state. States are `private` nested classes, so they reach `_components` and
 `_configurations` without either being exposed.
 
-- `OnEnter` / `OnExit` / `Update` are **`void`**, not `Awaitable` as on `LoaderUI.BaseState`. This
-  machine is driven per frame, and an `async void`-shaped `OnEnter` would keep running detached
-  after the state had already been exited. `LoaderUI` needs awaitables because its transitions wait
-  on animations; nothing here waits on anything.
+- `OnEnter` / `OnExit` / `Update` / `OnLeftMouseButton` are **`void`**, not `Awaitable` as on
+  `LoaderUI.BaseState`. This machine is driven per frame, and an `async void`-shaped `OnEnter` would
+  keep running detached after the state had already been exited. `LoaderUI` needs awaitables because
+  its transitions wait on animations; nothing here waits on anything.
+- `OnEnter` / `OnExit` are **abstract**; `Update` and `OnLeftMouseButton` are **virtual with empty
+  bodies**. Every state has to say what entering and leaving it means, but a state that ignores the
+  frame tick or the mouse should stay silent rather than carry an empty override — the states that
+  do override are then the interesting ones.
+- Input reaches the states through `MouseManager`, never directly: it subscribes once to
+  `InputManager.OnLeftMouseButton` and forwards to `_currentState`. A state subscribing on `OnEnter`
+  would have to remember to unsubscribe on `OnExit`, and a missed pair leaves a dead state reacting
+  to clicks.
+- Picking lives on `BaseState.TryGetInteractableUnderMouse`, not in the states: `Idle` needs it to
+  find a drag target and any later state that needs it gets the same one method. It filters on
+  `CanInteract()` and takes the **highest** `InteractionPriority` — larger enum value wins, the way
+  a sorting order does, so "on top" and "higher number" agree.
+- `_currentInteractable` is held by the manager, not by `Dragging`, and cleared in `Dragging.OnExit`
+  rather than by whoever changes state. Every exit from the drag frees it, including one that does
+  not go through the mouse.
+- `GetMouseWorldPosition` converts through `_camera`, which is `Camera.main` **resolved once in
+  `OnLoad`** and cached. `Camera.main` is a tag search, so calling it per click would be wasteful;
+  caching it also means the manager needs nothing wired in the inspector. The cost is that the
+  camera is whatever carries the `MainCamera` tag at load time — a camera swapped in later, or a
+  scene loaded afterwards with its own, will not be picked up.
+- **Load order matters.** `OnLoad` dereferences `UpdateManager.Instance` and `InputManager.Instance`,
+  so both must appear before `MouseManager` in the `LoadManager` sequence. `OnDestroy` guards both
+  with `HasInstance` instead, since teardown order is not ours to choose.
 - `_allStates` is an instance field, not `static` as on `LoaderUI`. Each state caches its `_parent`
   in `Start`, so a static list would hand every instance the last one's parent. Harmless for a
   singleton, wrong in general.

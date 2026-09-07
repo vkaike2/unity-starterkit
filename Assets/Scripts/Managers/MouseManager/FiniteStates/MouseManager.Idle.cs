@@ -1,3 +1,5 @@
+using Scripts.Enums;
+
 namespace Scripts.Managers
 {
     public partial class MouseManager
@@ -14,8 +16,17 @@ namespace Scripts.Managers
             {
             }
 
-            public override void Update()
+            public override void OnLeftMouseButton(InteractionState interactionState)
             {
+                if (interactionState != InteractionState.Pressed) return;
+
+                if (!TryGetInteractableUnderMouse(out var interactable)) return;
+
+                _parent._currentInteractable = interactable;
+
+                interactable.OnInteraction(InteractionType.LeftMouseButton, interactionState);
+
+                _parent.ChangeState(State.Dragging);
             }
         }
     }

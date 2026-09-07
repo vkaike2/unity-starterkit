@@ -1,3 +1,9 @@
+using System.Linq;
+using Scripts.Enums;
+using Scripts.Interfaces;
+using UnityEngine;
+using Vkaike2.StarterKit.Base.Utils;
+
 namespace Scripts.Managers
 {
     public partial class MouseManager
@@ -20,7 +26,25 @@ namespace Scripts.Managers
 
             public abstract void OnEnter();
             public abstract void OnExit();
-            public abstract void Update();
+
+            public virtual void Update()
+            {
+            }
+
+            public virtual void OnLeftMouseButton(InteractionState interactionState)
+            {
+            }
+
+            protected bool TryGetInteractableUnderMouse(out IInteractableEntity interactable)
+            {
+                interactable = RayCastUtils
+                    .GetComponentsAtPosition<IInteractableEntity>(_parent.GetMouseWorldPosition())
+                    .Where(entity => entity.CanInteract())
+                    .OrderByDescending(entity => entity.Priority)
+                    .FirstOrDefault();
+
+                return interactable != null;
+            }
         }
     }
 }

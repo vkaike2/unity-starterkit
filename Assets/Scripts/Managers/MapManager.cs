@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Generic;
+using Scripts.Entities;
 using UnityEngine;
-using UnityEngine.Tilemaps;
 using Vkaike2.StarterKit.Base.Abstracts;
-using Vkaike2.StarterKit.Base.Interfaces;
 
 namespace Scripts.Managers
 {
@@ -11,18 +11,39 @@ namespace Scripts.Managers
         [SerializeField] private Configurations _configurations;
         [SerializeField] private Components _components;
 
-        public Tilemap TileMap => _components.TileMap;
+        public IReadOnlyList<BoardTile> Tiles => _components.Board.Tiles;
+
+        private void OnValidate()
+        {
+            _configurations.ValidateFields(this);
+            _components.ValidateFields(this);
+        }
+
+        protected override async Awaitable OnLoad()
+        {
+            _components.Board.Initialize();
+        }
+
+        public bool TryGetTile(Vector2Int coordinate, out BoardTile boardTile)
+        {
+            return _components.Board.TryGetTile(coordinate, out boardTile);
+        }
 
         [Serializable]
-        private class Configurations
+        private class Configurations : ValidatableFields
         {
 
         }
 
         [Serializable]
-        private class Components
+        private class Components : ValidatableFields
         {
-            [field: SerializeField] public Tilemap TileMap { get; set; }
+            [field: SerializeField] public Board Board { get; set; }
+
+            protected override void Validate()
+            {
+                ValidateNull(Board, nameof(Board));
+            }
         }
     }
 }

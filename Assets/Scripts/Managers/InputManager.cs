@@ -1,4 +1,5 @@
 using System;
+using Scripts.Enums;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Vkaike2.StarterKit.Base.Abstracts;
@@ -10,11 +11,22 @@ namespace Scripts.Managers
         [SerializeField] private Configurations _configurations;
         [SerializeField] private Components _components;
 
-        public event Action<ClickState> OnLeftMouseButton;
+        public event Action<InteractionState> OnLeftMouseButton;
         public bool IsLeftMouseButtonPressed => 
             _components.LeftMouseButtonAction != null 
             && _components.LeftMouseButtonAction.IsPressed();
 
+        public Vector2 MouseScreenPosition =>
+            Mouse.current != null
+                ? Mouse.current.position.ReadValue()
+                : Vector2.zero;
+
+
+        private void OnValidate()
+        {
+            _configurations.ValidateFields(this);
+            _components.ValidateFields(this);
+        }
 
         protected override async Awaitable OnLoad()
         {
@@ -50,32 +62,31 @@ namespace Scripts.Managers
 
         private void HandleTapStarted(InputAction.CallbackContext context)
         {
-            OnLeftMouseButton?.Invoke(ClickState.Pressed);
+            OnLeftMouseButton?.Invoke(InteractionState.Pressed);
         }
 
         private void HandleTapCanceled(InputAction.CallbackContext context)
         {
-            OnLeftMouseButton?.Invoke(ClickState.Released);
-        }
-
-        public enum ClickState
-        {
-            Pressed,
-            Released
+            OnLeftMouseButton?.Invoke(InteractionState.Released);
         }
 
         [Serializable]
-        private class Configurations
+        private class Configurations : ValidatableFields
         {
 
         }
 
         [Serializable]
-        private class Components
+        private class Components : ValidatableFields
         {
             [field: SerializeField] private InputActionReference _leftMouseButtonAction;
 
             public InputAction LeftMouseButtonAction => _leftMouseButtonAction.action;
+
+            protected override void Validate()
+            {
+                ValidateNull(_leftMouseButtonAction, nameof(_leftMouseButtonAction));
+            }
         }
     }
 }

@@ -52,6 +52,8 @@ namespace Vkaike2.StarterKit.Managers.LoadManager.Base
                         await LoadSceneEntity(sequence, entity);
                         break;
                 }
+
+                await Awaitable.NextFrameAsync(_owner.destroyCancellationToken);
             }
         }
 
