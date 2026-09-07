@@ -49,13 +49,87 @@ rules out a shared "already completed" instance.
 - `Load()` is deliberately **not virtual**: it registers the instance and then calls `OnLoad()`,
   so a derived manager cannot forget to register itself. Work goes in `OnLoad`.
 - `OnLoad()` is **virtual with an empty async body**, not abstract, so a singleton whose only job
-  is to exist just doesn't override it. The empty body is what the `#pragma warning disable CS1998`
-  in that file is for — it keeps the warning in one place instead of on every manager.
-- A synchronous `OnLoad` that does real work but awaits nothing still trips CS1998. If that ever
-  becomes noise, add `-nowarn:1998` to an `Assets/csc.rsp` rather than putting a helper type in
-  the public API.
+  is to exist just doesn't override it. The empty body trips CS1998, and so does any override that
+  awaits nothing — that warning is now suppressed compiler-wide, see [csc.rsp](#cscrsp--cs1998-suppressed-everywhere).
 - **`LoadManager` is the one exception** to all of this: it calls `RegisterInstance()` from its own
   `Awake`, because it is the thing that loads everyone else and nobody is there to load it.
+
+### SequenceRunner
+
+The entity-loading half of `LoadManager` lives in `SequenceRunner`, a plain class (not a
+MonoBehaviour) constructed with the MonoBehaviour that owns it. `LoadManager` and `SceneLoader` both
+hold one, so neither duplicates the loading switch or the validation loop.
+
+It is **composition, not a base class**, because C# allows one base and `LoadManager` already has
+one: `Singleton<LoadManager>`. `SceneLoader` cannot join that hierarchy — every loaded scene has its
+own, and `RegisterInstance` throws on the second instance. The owner is passed in for the three
+things the loading actually needs from a component: `transform` as the fallback parent,
+`destroyCancellationToken` for the waits, and nothing else.
+
+The runner is reached through a lazy `Runner => _sequenceRunner ??= new(this)` property rather than
+built in `Awake`, keeping `Awake` free the way the rest of the kit does. The property is named
+`Runner`, not `SequenceRunner`: a nested `Configurations` class calls the **static**
+`SequenceRunner.ValidateSequences`, and an instance property of the enclosing type sharing that name
+would shadow the type and not compile.
+
+`ValidateSequences` is static and takes the log context, so `OnValidate` on either host is one call
+per list. `LoadManager` validates its `TestSequence` and `Sequences`, `SceneLoader` its `Sequences`.
+
+### The loading screen has one owner
+
+`SceneLoader.Load()` runs its sequences' entities **without touching a `LoaderUI`**. It is called
+from inside a `LoadManager` sequence, which means the screen is already covered; a nested
+`ToggleLoader(open: true)` at the end of the scene's own load would uncover the screen while the
+outer sequence still had entities to load. `LoadManager.LoadSequence` is the only thing that drives
+the loader, and it wraps everything below it.
+
+The consequence: `UseDefaultLoader` / `LoaderUI` on a `SceneLoader`'s sequences are inert. They mean
+something only on the sequences `LoadManager` itself runs.
+
+### Loading an entity
+
+`LoadEntities` walks a sequence in order and awaits each entry before starting the next — the list
+*is* the load order, so nothing here runs in parallel. Each `Entity.Type` has its own method rather
+than a body inside the switch, so a case stays one line.
+
+- **GameObject** is a prefab, so it is instantiated first. `GameObjectParent` is where it lands;
+  when it is empty the manager parents it to itself, which keeps a manager alive across the scene
+  unloads its own loading later performs.
+- **Object** is already an instance (a ScriptableObject, or a scene object on a non-asset sequence),
+  so it is only asked for its `ILoadableEntity` and loaded.
+- **Scene** loads additively and is then asked for its `SceneLoader`. Every scene the kit loads is
+  expected to have exactly one; it is the scene's own entry point, the way `LoadManager` is the
+  game's.
+- The `null` checks are not redundant with `OnValidate`. Validation runs at authoring time on the
+  asset; a prefab can lose its component afterwards, and a scene path can point at a scene missing
+  from the build settings. Both throw with the sequence name, since a silent skip would leave a
+  half-loaded game with no clue why.
+- Scene lookup is `GetSceneByPath`, not `GetSceneByName` — `ScenePath` is stored as the asset path,
+  and two scenes in different folders may share a name.
+- The `SceneLoader` is found by sweeping the loaded scene's root objects with
+  `GetComponentInChildren(includeInactive: true)`. `FindObjectOfType` searches every loaded scene
+  and would happily return another scene's loader.
+- Loaders are kept in `_sceneLoaders`, keyed by scene path, so the scene can later be addressed
+  (unloaded, or re-sequenced) without searching for it again.
+
+### Unloading the boot leftovers
+
+`LoadManager.Start` begins with `UnloadActiveScenes()`, which unloads every loaded scene except the
+one the manager's GameObject lives in. Working in the editor, whatever scenes happened to be open in
+the Hierarchy are also loaded on Play, and the kit's own boot scene must be the only survivor.
+
+- The scene to keep is `gameObject.scene`, not the active scene. Which scene is *active* on boot is
+  whatever the editor left set; where this component actually sits is not. It then makes that scene
+  the active one, so anything instantiated afterwards lands in it rather than in a scene about to
+  disappear.
+- The scenes are collected into a list **before** any unload. `SceneManager.GetSceneAt` indexes a
+  list that unloading mutates, so unloading inside the loop skips scenes.
+- `UnloadSceneAsync` returns `null` when Unity refuses the unload (the last loaded scene, an
+  already-unloading one). Awaiting that would be a null ref, so a null operation is skipped.
+- Awaiting is the same `while (!isDone) await Awaitable.NextFrameAsync(destroyCancellationToken)`
+  poll used by [[LoaderUI]] — `AsyncOperation` is not awaitable on its own, and the token means
+  tearing the manager down stops the wait.
+- `Start` awaits it, so the first sequence never loads into a scene that is still being torn down.
 
 ### LoadSequence
 
@@ -292,6 +366,36 @@ declared invisible for a state must not appear in it.
   a nested serializable class. A list element path ends in `.Array.data[i]`, whose parent is the list
   itself and holds no sibling fields, so that case falls back to the root object.
 
+### Button
+
+`[Button]` on a method exposes it as a clickable button under the default inspector. It is a plain
+`System.Attribute`, not a `PropertyAttribute`: `PropertyDrawer` only ever sees serialized fields, so
+methods have to be found by reflection from a `CustomEditor` instead.
+
+`InspectorButtons.Draw(editor)` does that work, and two near-empty editors — one for
+`typeof(MonoBehaviour)` and one for `typeof(ScriptableObject)`, both with `editorForChildClasses:
+true` — are what put it on every user script. Unity picks the **most specific** editor for a type,
+so a game's own `CustomEditor` still wins over these; when it does, its author calls
+`InspectorButtons.Draw(this)` to keep the buttons. Unity's own components are not `MonoBehaviour`
+(they derive straight from `Behaviour`), so none of their inspectors are shadowed by this.
+
+- Methods are collected walking the type hierarchy with `DeclaredOnly`, deduped by name, derived
+  first. `FlattenHierarchy` would miss a private method on a base class, and without the dedupe an
+  `override` of a decorated method would draw two buttons. The result is cached per `Type`, since
+  `OnInspectorGUI` runs every repaint.
+- Only parameterless methods work; anything else draws a warning box instead of a button. Drawing
+  argument fields would mean serializing state the inspector has nowhere to keep.
+- `ApplyModifiedProperties` runs before the call and `Update` after, so the method reads the values
+  the user just typed and the inspector shows whatever the method changed.
+- Each target gets an `Undo.RecordObject` + `SetDirty`, so a button is undoable and its edits are
+  saved. Static methods are called once, with no target.
+- The call is wrapped so a throwing method logs through `Debug.LogException` with the object as
+  context instead of taking the whole inspector down with it. A non-null return value is logged;
+  an `Awaitable` is not, since it is the normal shape of an async method here and its value is
+  meaningless.
+- `ButtonMode` greys the button out rather than hiding it, so a play-mode-only action is visible
+  (and explains itself) while the editor is stopped.
+
 ### HierarchyPainter
 
 Colours rows in the **Hierarchy** window by name — a `GameObject` whose name contains `Manager`
@@ -348,6 +452,19 @@ do not let them come back.
 Every new sample folder needs its own entry in the `samples` array, or it ships invisibly with no
 way to import it.
 
+### csc.rsp — CS1998 suppressed everywhere
+
+`-nowarn:1998` ("this async method lacks await") is set through a `csc.rsp` next to every assembly:
+`Assets/csc.rsp` for the predefined assemblies, and one beside each of the four `.asmdef`s. The kit's
+loading contract is `Awaitable`-returning (`ILoadableEntity.Load()`, `MySingleton.OnLoad()`), so an
+implementation that has nothing to await is the normal case, not a mistake — and `#pragma warning
+disable CS1998` around each one was noise the no-comments rule already rejects. Those pragmas were
+removed when the rsp files landed.
+
+There is no project-wide switch: Unity regenerates the `.csproj` on every reimport, so
+`Directory.Build.props` and `.editorconfig` severities are discarded. **A new `.asmdef` needs its own
+`csc.rsp` in the same folder**, or CS1998 comes back for that assembly alone.
+
 ### .gitattributes
 
 Unity YAML (`.unity`, `.prefab`, `.asset`, `.meta`, and the rest) is routed to `merge=unityyamlmerge`.
@@ -371,8 +488,73 @@ Revisit only if a genuinely large asset ever needs to live here.
 
 ---
 
+## Game scripts (Assets/Scripts)
+
+**Nothing outside `Packages/` belongs to the package.** `Assets/` is a throwaway game prototype
+whose only purpose is to exercise the kit before it is consumed by a real project. Code there may
+hold game logic freely — the no-game-logic rule applies to the package alone. It is documented here
+anyway, under the same no-comments rule.
+
+### InputManager
+
+Wraps `PlayerInput.inputactions` and republishes each action as a plain C# event, so nothing else in
+the game touches the Input System directly. Currently one action: `LMB` -> `OnLeftMouseButton`.
+
+**PC only, deliberately.** The `LMB` action was briefly bound to `<Mouse>/leftButton` *and*
+`<Touchscreen>/primaryTouch/tap`, and that was undone. One action cannot honestly serve both:
+`tap` is a *completed gesture* that pulses after the finger lifts, so it has no press edge to
+report, while `leftButton` is a held state with a real press and release. A drag also needs a
+position, which the mouse takes from one shared cursor and touch carries per-finger. Mobile, if it
+ever comes, gets its own action and its own event — not a second binding on this one.
+
+- The press comes from `started` / `canceled`, not `performed`. A Button action fires `performed`
+  the moment the press crosses the threshold and never again until release, so `performed` alone
+  cannot tell press from release. `started` is the press, `canceled` the release.
+- Actions arrive as inspector-assigned `InputActionReference`s, not as an `InputActionAsset` plus
+  map/action name strings. The reference serializes the asset GUID and the action's **id**, so
+  renaming the action in the asset cannot break the lookup, and there is nothing to keep in sync by
+  hand. `Components` keeps the reference private and exposes `InputAction` directly, so callers
+  never unwrap `.action`.
+- Events are named after the physical input (`OnLeftMouseButton`), not after a device-neutral
+  abstraction. With the platform scope narrowed to PC, a name like `OnPrimaryTap` would be claiming
+  a portability the class does not have. No underscores in public members either — an `_` prefix
+  means "private field" everywhere else here.
+- Subscribe and unsubscribe are one method taking an `activating` flag, so the pairs cannot drift
+  apart as more actions are added. Enabling happens per **action**, not per map: the manager owns
+  the actions it exposes and has no business switching on the rest of `PlayerActions`.
+- Actions are enabled in `OnLoad` and disabled in `OnDestroy`, since `Awake` does nothing anywhere
+  in this project — see [Singleton](#singleton).
+
+### MouseManager
+
+A finite state machine over `Idle` / `Dragging`, built as a `partial class` split the same way
+`LoaderUI` is — `MouseManager.cs` holds the machine, `Base/` the shared state, `FiniteStates/` one
+file per state. States are `private` nested classes, so they reach `_components` and
+`_configurations` without either being exposed.
+
+- `OnEnter` / `OnExit` / `Update` are **`void`**, not `Awaitable` as on `LoaderUI.BaseState`. This
+  machine is driven per frame, and an `async void`-shaped `OnEnter` would keep running detached
+  after the state had already been exited. `LoaderUI` needs awaitables because its transitions wait
+  on animations; nothing here waits on anything.
+- `_allStates` is an instance field, not `static` as on `LoaderUI`. Each state caches its `_parent`
+  in `Start`, so a static list would hand every instance the last one's parent. Harmless for a
+  singleton, wrong in general.
+- `Update` reaches the states through `UpdateManager` (`UpdateOrder.Managers`), not a Unity `Update`
+  — see [Update dispatch](#update-dispatch). `UpdateOrder.Managers` is `0`, ahead of
+  `Entities`, so a manager's state has settled before entities read it in the same frame.
+- The folder is nested (`Managers/MouseManager/…`) but the namespace stays `Scripts.Managers`, the
+  way `Runtime/Managers/LoadManager/` stays in `Vkaike2.StarterKit.Managers`. A
+  `Scripts.Managers.MouseManager` namespace would collide with the class name.
+
+---
+
 ## Known issues
 
-- `LoadManager.Configurations` and `LoadManager.Components` declare their members as auto-properties
-  (`public List<LoadSequence> Sequences { get; set; }`). **Unity serializes fields, not properties**,
-  so these are null at runtime and invisible in the inspector. They need to become fields.
+- `SceneLoader.LoadSequence()` — the `ILoadableEntity.Load()` a scene's own loader exposes — was
+  briefly named `LoadSequence`; the interface member is `Load()`. Nothing else carries the old name.
+
+Resolved: the `[field: SerializeField]` auto-properties on `Configurations` / `Components` do
+serialize — the attribute targets the compiler-generated backing field, which is what Unity picks
+up. `SceneLoader.Configurations` was the real bug: it was missing `[Serializable]` entirely.
+`LoadSequence.IsActive` was the same shape of bug — an auto-property with no link to the serialized
+`_isActive` field, so every sequence filtered out as inactive. It is now `=> _isActive`.

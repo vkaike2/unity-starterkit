@@ -24,8 +24,6 @@ namespace Vkaike2.StarterKit.UI
             public abstract Awaitable OnEnter();
             public abstract Awaitable OnExit();
 
-            public virtual void OnUpdate() { }
-
             protected async Awaitable LoadTransition(bool toOpen)
             {
                 _components.Container.SetActive(true);

@@ -1,30 +1,45 @@
-
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Vkaike2.StarterKit.Base.Interfaces;
 using Vkaike2.StarterKit.Base.Models;
+using Vkaike2.StarterKit.Managers.LoadManager.Base;
 
 namespace Vkaike2.StarterKit.Managers.LoadManager
 {
     public class SceneLoader : MonoBehaviour, ILoadableEntity
     {
         [SerializeField] private Configurations _configurations;
-        [SerializeField] private Components _components;
 
-        public Awaitable Load()
+        private SequenceRunner _sequenceRunner;
+
+        private SequenceRunner Runner => _sequenceRunner ??= new SequenceRunner(this);
+
+        private void OnValidate()
         {
-            throw new NotImplementedException();
+            _configurations.ValidateSequences(this);
         }
 
-        private class Configurations
+        public async Awaitable Load()
         {
-            [field: SerializeField] public List<LoadSequence> Sequences { get; set; }
+            var sequencesToLoad = _configurations.Sequences.Where(e => e.IsActive).ToList();
+
+            foreach (var sequence in sequencesToLoad)
+            {
+                await Runner.LoadEntities(sequence);
+            }
         }
 
         [Serializable]
-        private class Components
+        private class Configurations
         {
+            [field: SerializeField] public List<LoadSequence> Sequences { get; set; }
+
+            public void ValidateSequences(UnityEngine.Object context)
+            {
+                SequenceRunner.ValidateSequences(Sequences, context);
+            }
         }
     }
 }

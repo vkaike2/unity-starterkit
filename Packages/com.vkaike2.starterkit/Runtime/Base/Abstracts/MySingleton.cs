@@ -4,7 +4,7 @@ using Vkaike2.StarterKit.Base.Interfaces;
 
 namespace Vkaike2.StarterKit.Base.Abstracts
 {
-    public abstract class Singleton<T> : MonoBehaviour, ILoadableEntity where T : Singleton<T>
+    public abstract class MySingleton<T> : MonoBehaviour, ILoadableEntity where T : MySingleton<T>
     {
         public static T Instance { get; private set; }
 
@@ -17,11 +17,9 @@ namespace Vkaike2.StarterKit.Base.Abstracts
             await OnLoad();
         }
 
-#pragma warning disable CS1998
         protected virtual async Awaitable OnLoad()
         {
         }
-#pragma warning restore CS1998
 
         protected void RegisterInstance()
         {

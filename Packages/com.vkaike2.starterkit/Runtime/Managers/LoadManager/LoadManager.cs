@@ -1,19 +1,24 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Vkaike2.StarterKit.Base.Abstracts;
-using Vkaike2.StarterKit.Base.Interfaces;
 using Vkaike2.StarterKit.Base.Models;
+using Vkaike2.StarterKit.Managers.LoadManager.Base;
 using Vkaike2.StarterKit.UI;
-using static Vkaike2.StarterKit.Base.Models.LoadSequence;
 
 namespace Vkaike2.StarterKit.Managers.LoadManager
 {
-    public class LoadManager : Singleton<LoadManager>
+    public class LoadManager : MySingleton<LoadManager>
     {
         [SerializeField] private Configurations _configurations;
         [SerializeField] private Components _components;
+
+        private SequenceRunner _sequenceRunner;
+
+        private SequenceRunner Runner => _sequenceRunner ??= new SequenceRunner(this);
 
         private void Awake()
         {
@@ -25,17 +30,27 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
             _configurations.ValidateSequences(this);
         }
 
-        // private async void Start()
-        // {
-        //     #if DEBUG
-        //                 LoadSequence(_configurations.TestSequence, isInitialLoad: true);
-        //     #else
-        //                 LoadSequence(_configurations.Sequences);
-        //     #endif
-        // }
+        private async void Start()
+        {
+            await UnloadActiveScenes();
+#if DEBUG
+            LoadInitialSequence(_configurations.TestSequence);
+#else
+            LoadInitialSequence(_configurations.Sequences);
+#endif
+        }
 
+        private async void LoadInitialSequence(List<LoadSequence> sequences)
+        {
+            var sequencesToLoad = sequences.Where(e => e.IsActive).ToList();
 
-        private async void LoadSequence(LoadSequence sequence, bool isInitialLoad = false)
+            foreach (var sequence in sequencesToLoad)
+            {
+                await LoadSequence(sequence, isInitialLoad: true);
+            }
+        }
+
+        private async Awaitable LoadSequence(LoadSequence sequence, bool isInitialLoad = false)
         {
             var loader = sequence.UseDefaultLoader ? _components.DefaultLoader : sequence.LoaderUI;
 
@@ -48,34 +63,41 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
                 await loader.ToggleLoader(open: false);
             }
 
-            await LoadManagers(sequence);
-            await LoadEntities(sequence);
+            await Runner.LoadEntities(sequence);
 
             await loader.ToggleLoader(open: true);
         }
 
-        private async Awaitable LoadManagers(LoadSequence sequence)
+        private async Awaitable UnloadActiveScenes()
         {
-            foreach (LoadSequence.Entity manager in sequence.Managers)
+            var sceneToKeep = gameObject.scene;
+
+            if (SceneManager.GetActiveScene() != sceneToKeep)
             {
-                if (manager.DataType != Entity.Type.GameObject)
-                {
-                    throw new Exception($"The LoadSequence {sequence.Name} has a non GameObject Manager!");
-                }
-
-                var entity = Instantiate(manager.GameObject, this.transform);
-                var loadableEntity = entity.GetComponent<ILoadableEntity>();
-
-                await loadableEntity.Load();
+                SceneManager.SetActiveScene(sceneToKeep);
             }
-        }
 
-        private async Awaitable LoadEntities(LoadSequence sequence)
-        {
-            foreach (var entity in sequence.Entities)
+            var scenesToUnload = new List<Scene>();
+
+            for (int index = 0; index < SceneManager.sceneCount; index++)
             {
+                var scene = SceneManager.GetSceneAt(index);
 
+                if (scene == sceneToKeep || !scene.isLoaded) continue;
 
+                scenesToUnload.Add(scene);
+            }
+
+            foreach (var scene in scenesToUnload)
+            {
+                var unloadOperation = SceneManager.UnloadSceneAsync(scene);
+
+                if (unloadOperation == null) continue;
+
+                while (!unloadOperation.isDone)
+                {
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                }
             }
         }
 
@@ -89,27 +111,12 @@ namespace Vkaike2.StarterKit.Managers.LoadManager
             [field: SerializeField] public List<LoadSequence> Sequences { get; set; }
 
 
-            public void ValidateSequences(LoadManager parent)
+            public void ValidateSequences(UnityEngine.Object context)
             {
 #if DEBUG
-                if (TestSequence != null && TestSequence.Count > 0)
-                {
-                    ValidateSequence(TestSequence, parent);
-                }
+                SequenceRunner.ValidateSequences(TestSequence, context);
 #endif
-                ValidateSequence(Sequences, parent);
-            }
-
-            private void ValidateSequence(List<LoadSequence> sequences, LoadManager parent)
-            {
-                if (TestSequence == null || TestSequence.Count == 0) return;
-
-                foreach (var sequence in sequences)
-                {
-                    if (sequence == null) continue;
-                    
-                    sequence.IsValid(parent);
-                }
+                SequenceRunner.ValidateSequences(Sequences, context);
             }
         }
 

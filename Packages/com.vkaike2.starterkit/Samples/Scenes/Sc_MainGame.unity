@@ -165,29 +165,104 @@ MonoBehaviour:
   m_EditorClassIdentifier: Vkaike2.StarterKit::Vkaike2.StarterKit.Managers.LoadManager
   _configurations:
     <TestSequence>k__BackingField:
-    - _name: Load Sequence
+    - _name: Test Sequence
       _isActive: 1
-      _useDefaultLoader: 0
+      _useDefaultLoader: 1
       _loaderUI: {fileID: 0}
-      _loadableEntities:
-        <Managers>k__BackingField:
+      _entities:
+        <LoadableEntities>k__BackingField:
         - name: '[GameObject] UpdateManager'
           _shouldLoad: 1
           _dataType: 1
           <ScenePath>k__BackingField: 
           <GameObject>k__BackingField: {fileID: 17263912167297300, guid: a42cc51f7a2146e46a4d2c197119bd64, type: 3}
+          <Parent>k__BackingField: {fileID: 0}
           _object: {fileID: 0}
-        <Entities>k__BackingField: []
+        - name: '[Scene] Sc_GameManagers.unity'
+          _shouldLoad: 1
+          _dataType: 0
+          <ScenePath>k__BackingField: Assets/Scenes/Sc_GameManagers.unity
+          <GameObject>k__BackingField: {fileID: 17263912167297300, guid: a42cc51f7a2146e46a4d2c197119bd64, type: 3}
+          <Parent>k__BackingField: {fileID: 0}
+          _object: {fileID: 0}
+        - name: '[Scene] Sc_2dGameExample.unity'
+          _shouldLoad: 1
+          _dataType: 0
+          <ScenePath>k__BackingField: Assets/Scenes/Sc_2dGameExample.unity
+          <GameObject>k__BackingField: {fileID: 17263912167297300, guid: a42cc51f7a2146e46a4d2c197119bd64, type: 3}
+          <Parent>k__BackingField: {fileID: 0}
+          _object: {fileID: 0}
     <Sequences>k__BackingField:
     - _name: 
       _isActive: 1
       _useDefaultLoader: 1
       _loaderUI: {fileID: 0}
-      _loadableEntities:
-        <Managers>k__BackingField: []
-        <Entities>k__BackingField: []
+      _entities:
+        <LoadableEntities>k__BackingField: []
   _components:
     <DefaultLoader>k__BackingField: {fileID: 2121471231}
+--- !u!1 &1166949238
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1166949239}
+  m_Layer: 0
+  m_Name: '--- '
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1166949239
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1166949238}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 582, y: 327.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1618674920
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1618674921}
+  m_Layer: 0
+  m_Name: ---
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1618674921
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1618674920}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 582, y: 327.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1844211717
 GameObject:
   m_ObjectHideFlags: 0
@@ -432,7 +507,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 5
+  orthographic size: 2.19
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -480,7 +555,7 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: -1
+  m_RendererIndex: 0
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
@@ -615,6 +690,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Loader UI
       objectReference: {fileID: 0}
+    - target: {fileID: 8952029383281348605, guid: 7b9c76206614c3542ba79d76fabd6d68, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -624,7 +703,9 @@ PrefabInstance:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 2058332459}
-  - {fileID: 752333448}
-  - {fileID: 1844211721}
   - {fileID: 2040866158}
+  - {fileID: 2058332459}
+  - {fileID: 1618674921}
+  - {fileID: 752333448}
+  - {fileID: 1166949239}
+  - {fileID: 1844211721}

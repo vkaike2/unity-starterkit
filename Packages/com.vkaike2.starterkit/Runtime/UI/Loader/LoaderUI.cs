@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using Vkaike2.StarterKit.Attributes;
 using Vkaike2.StarterKit.Base.Extensions;
 
 namespace Vkaike2.StarterKit.UI
@@ -64,11 +65,11 @@ namespace Vkaike2.StarterKit.UI
                 await Awaitable.NextFrameAsync(destroyCancellationToken);
             }
         }
-
-
-        private void Update()
+        
+        [Button(Header = "Debug", SpaceBefore = 8, Order = 10)]
+        private void ToggleVisibility()
         {
-            _currentState?.OnUpdate();
+            _components.Container.SetActive(!_components.Container.activeSelf);
         }
 
         private void TryToStartAllStates()

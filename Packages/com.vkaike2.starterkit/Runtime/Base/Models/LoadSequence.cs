@@ -17,36 +17,30 @@ namespace Vkaike2.StarterKit.Base.Models
         [SerializeField, HideIf(nameof(_isActive), false, Header = "Configurations")]
         private bool _useDefaultLoader = true;
         [SerializeField, HideIf(nameof(_useDefaultLoader)), HideIf(nameof(_isActive), false)] private LoaderUI _loaderUI;
-        [SerializeField, HideIf(nameof(_isActive), false)] private EntitiesWrapper _loadableEntities;
+        [SerializeField, HideIf(nameof(_isActive), false)] private EntitiesWrapper _entities;
 
 
-        public bool IsActive { get; set; }
+        public bool IsActive => _isActive;
         public string Name => _name;
 
         public bool UseDefaultLoader => _useDefaultLoader;
         public LoaderUI LoaderUI => _loaderUI;
-        public List<Entity> Managers => _loadableEntities.Managers;
-        public List<Entity> Entities => _loadableEntities.Entities;
+        public List<Entity> Entities => _entities.LoadableEntities;
 
 
         public void IsValid(UnityEngine.Object context)
         {
-            for (var index = 0; index < _loadableEntities.Managers.Count; index++)
-            {
-                _loadableEntities.Managers[index]?.IsValid(index, context);
-            }
 
-            for (var index = 0; index < _loadableEntities.Entities.Count; index++)
+            for (var index = 0; index < _entities.LoadableEntities.Count; index++)
             {
-                _loadableEntities.Entities[index]?.IsValid(index, context);
+                _entities.LoadableEntities[index]?.IsValid(index, context);
             }
         }
 
         [Serializable]
         public class EntitiesWrapper
         {
-            [field: SerializeField] public List<Entity> Managers { get; private set; }
-            [field: SerializeField] public List<Entity> Entities { get; private set; }
+            [field: SerializeField] public List<Entity> LoadableEntities { get; private set; }
         }
 
         [Serializable]
@@ -62,6 +56,8 @@ namespace Vkaike2.StarterKit.Base.Models
 
             [field: SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_dataType), Type.GameObject)]
             public GameObject GameObject { get; private set; }
+            [field: SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_dataType), Type.GameObject)]
+            public Transform Parent { get; private set; }
 
             [SerializeField, HideIf(nameof(_shouldLoad), false), ShowIf(nameof(_dataType), Type.Object)]
             private UnityEngine.Object _object;

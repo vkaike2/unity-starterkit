@@ -7,7 +7,7 @@ using Vkaike2.StarterKit.Enums;
 
 namespace Vkaike2.StarterKit.Managers
 {
-    public class UpdateManager : Singleton<UpdateManager>, ILoadableEntity
+    public class UpdateManager : MySingleton<UpdateManager>, ILoadableEntity
     {
         private readonly UpdateChannel _updates = new();
         private readonly UpdateChannel _fixedUpdates = new();
