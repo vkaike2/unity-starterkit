@@ -155,8 +155,8 @@ ScriptedImporter:
     customData: 
     rect:
       serializedVersion: 2
-      x: 5
-      y: 21
+      x: 6
+      y: 22
       width: 32
       height: 32
     spriteID: 2d7bc3280e83fd84fa797f5b968fcb1c
@@ -176,8 +176,8 @@ ScriptedImporter:
     customData: 
     rect:
       serializedVersion: 2
-      x: 37
-      y: 21
+      x: 38
+      y: 22
       width: 32
       height: 32
     spriteID: e0e93aa73deff9849ac55b1043e230e4
@@ -197,8 +197,8 @@ ScriptedImporter:
     customData: 
     rect:
       serializedVersion: 2
-      x: 5
-      y: 5
+      x: 6
+      y: 6
       width: 32
       height: 16
     spriteID: 0baa8119171d5c64aad0225aed8bd6a8
@@ -228,10 +228,10 @@ ScriptedImporter:
       frameIndex: 0
       additiveSortOrder: 0
       cellRect:
-        x: 31
-        y: 47
-        width: 66
-        height: 50
+        x: 30
+        y: 46
+        width: 68
+        height: 52
       spriteId: d7c5ddc10290c28409f85f94b9c16716
     linkedCells: []
     tileCells: []

@@ -8,7 +8,9 @@ namespace Scripts.Entities.Player
 
             public override void OnEnter()
             {
-                _components.ArtPosition.position = _initialPosition;
+                _components.SpritePosition.localPosition = _initialSpriteLocalPosition;
+
+                SnapToCurrentTile(snappingOnlyShadow: false);
             }
 
             public override void OnExit()

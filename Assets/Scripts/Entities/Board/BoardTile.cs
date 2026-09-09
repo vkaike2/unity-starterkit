@@ -10,6 +10,7 @@ namespace Scripts.Entities
         [SerializeField] private Components _components;
 
         public Vector2Int Coordinate { get; private set; }
+        public Transform CenterPosition => _components.CenterPosition;
 
         private void OnValidate()
         {
@@ -50,10 +51,12 @@ namespace Scripts.Entities
         private class Components : ValidatableFields
         {
             [field: SerializeField] public SpriteRenderer SpriteRenderer { get; set; }
+            [field: SerializeField] public Transform CenterPosition { get; set; }
 
             protected override void Validate()
             {
                 ValidateNull(SpriteRenderer, nameof(SpriteRenderer));
+                ValidateNull(CenterPosition, nameof(CenterPosition));
             }
         }
     }

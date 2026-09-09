@@ -5,13 +5,12 @@ using Scripts.Enums;
 using Scripts.Interfaces;
 using UnityEngine;
 using Vkaike2.StarterKit.Base.Abstracts;
-using Vkaike2.StarterKit.Base.Interfaces;
 using Vkaike2.StarterKit.Enums;
 using Vkaike2.StarterKit.Managers;
 
 namespace Scripts.Entities.Player
 {
-    public partial class PlayerEntity : MonoBehaviour, ILoadableEntity, IInteractableEntity
+    public partial class PlayerEntity : MonoBehaviour, IInteractableEntity
     {
         [SerializeField] private Configurations _configurations;
         [SerializeField] private Components _components;
@@ -19,6 +18,8 @@ namespace Scripts.Entities.Player
         public InteractionPriority Priority => InteractionPriority.Player;
 
         private BaseState _currentState;
+
+        private BoardTile? _currentTile;
 
         private readonly List<BaseState> _allStates = new()
         {
@@ -34,19 +35,14 @@ namespace Scripts.Entities.Player
             return _currentState.State == state;
         }
 
-        public async Awaitable Load()
+        public async Awaitable Initialize(BoardTile initialTile)
         {
             UpdateManager.Instance.Register(
                 UpdateType.FixedUpdate,
                 UpdateOrder.Entities,
                 MyFixedUpdate);
 
-            // _currentTile = MapManager.Instance.GetTileAtWorldPosition(
-            //     _components.GroundPosition.position,
-            //     this);
-
-            // Debug.Log($"[{nameof(PlayerEntity)}] {name} is on tile "
-            //           + (_currentTile != null ? _currentTile.Coordinate.ToString() : "none"));
+            _currentTile = initialTile;
 
             ChangeState(State.Idle);
         }
@@ -63,6 +59,11 @@ namespace Scripts.Entities.Player
             ChangeState(interactionState == InteractionState.Pressed
                 ? State.Dragging
                 : State.Idle);
+        }
+
+        public void OnDrag(Vector2 worldPosition)
+        {
+            _currentState?.OnDrag(worldPosition);
         }
 
         private void OnValidate()
@@ -113,15 +114,15 @@ namespace Scripts.Entities.Player
         [Serializable]
         private class Components : ValidatableFields
         {
-            [field: SerializeField] public Transform ArtPosition { get; private set; }
+            [field: SerializeField] public Transform SpritePosition { get; private set; }
+            [field: SerializeField] public Transform ShadowPosition { get; private set; }
             [field: SerializeField] public Transform GroundPosition { get; private set; }
-            [field: SerializeField] public Transform DraggingPosition { get; private set; }
 
             protected override void Validate()
             {
-                ValidateNull(ArtPosition, nameof(ArtPosition));
+                ValidateNull(SpritePosition, nameof(SpritePosition));
+                ValidateNull(ShadowPosition, nameof(ShadowPosition));
                 ValidateNull(GroundPosition, nameof(GroundPosition));
-                ValidateNull(DraggingPosition, nameof(DraggingPosition));
             }
         }
     }

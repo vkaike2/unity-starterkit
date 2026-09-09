@@ -1,1 +1,3 @@
 -nowarn:1998
+-nowarn:8632
+-nowarn:UAC1002

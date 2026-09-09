@@ -2,7 +2,7 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace Vkaike2.StarterKit.Base.Abstracts
-{
+{   
     public abstract class ValidatableFields
     {
         protected Object Context { get; private set; }
@@ -25,7 +25,7 @@ namespace Vkaike2.StarterKit.Base.Abstracts
             var owner = GetType().DeclaringType?.Name ?? GetType().Name;
             var contextName = Context != null ? Context.name : "unknown";
 
-            Debug.LogError(
+            Debug.LogWarning(
                 $"[{owner}] '{contextName}' has no {fieldName} assigned in {GetType().Name}.",
                 Context);
         }

@@ -7,13 +7,17 @@ namespace Scripts.Entities.Player
         private abstract class BaseState
         {
             protected PlayerEntity _parent;
-
             protected PlayerEntity.Components _components;
             protected PlayerEntity.Configurations _configurations;
+            protected Vector3 _initialSpriteLocalPosition;
+            protected Vector3 _initialShadowLocalPosition;
+            protected BoardTile CurrentTile
+            {
+                get { return _parent._currentTile; }
+                set { _parent._currentTile = value; }
+            }
 
-            protected Vector2 _initialPosition;
-
-            public abstract PlayerEntity.State State { get; }
+            public abstract State State { get; }
 
             public virtual void Start(PlayerEntity parent)
             {
@@ -21,7 +25,8 @@ namespace Scripts.Entities.Player
                 _components = parent._components;
                 _configurations = parent._configurations;
 
-                _initialPosition = _components.ArtPosition.position;
+                _initialSpriteLocalPosition = _components.SpritePosition.localPosition;
+                _initialShadowLocalPosition = _components.ShadowPosition.localPosition;
             }
 
             public abstract void OnEnter();
@@ -29,6 +34,26 @@ namespace Scripts.Entities.Player
 
             public virtual void OnFixedUpdate()
             {
+            }
+
+            public virtual void OnDrag(Vector2 worldPosition)
+            {
+            }
+
+
+            protected void SnapToCurrentTile(bool snappingOnlyShadow)
+            {
+                if (CurrentTile == null) return;
+
+                if (snappingOnlyShadow)
+                {
+                    _components.ShadowPosition.position = CurrentTile.CenterPosition.position;
+                }
+                else
+                {
+                    _parent.transform.position = CurrentTile.CenterPosition.position;
+                    _components.ShadowPosition.localPosition = _initialShadowLocalPosition;
+                }
             }
         }
     }

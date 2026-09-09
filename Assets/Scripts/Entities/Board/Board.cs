@@ -12,8 +12,14 @@ namespace Scripts.Entities
         [SerializeField] private Components _components;
 
         public IReadOnlyList<BoardTile> Tiles => _tiles;
-
+        
         private readonly List<BoardTile> _tiles = new();
+
+        private Vector2Int Center => (_configurations.Size - Vector2Int.one) / 2;
+
+        private Vector3 CenterOffset => _centerOffset ??= GetCenterOffset();
+
+        private Vector3? _centerOffset;
 
         private void OnValidate()
         {
@@ -27,16 +33,43 @@ namespace Scripts.Entities
             BuildTiles();
         }
 
-        public bool TryGetTile(Vector2Int coordinate, out BoardTile boardTile)
+        public BoardTile? GetTile(Vector2Int coordinate)
         {
-            boardTile = _tiles.FirstOrDefault(tile => tile.Coordinate == coordinate);
+            return _tiles.FirstOrDefault(tile => tile.Coordinate == coordinate);
+        }
 
-            return boardTile != null;
+        public BoardTile? GetTileAtWorldPosition(Vector2 worldPosition)
+        {
+            return GetTile(GetCoordinateAtWorldPosition(worldPosition));
+        }
+
+        private Vector2Int GetCoordinateAtWorldPosition(Vector2 worldPosition)
+        {
+            var localPosition = transform.InverseTransformPoint(worldPosition) - CenterOffset;
+
+            var horizontal = localPosition.x / _configurations.CellSize.x;
+            var vertical = localPosition.y / _configurations.CellSize.y;
+
+            return new Vector2Int(
+                Mathf.RoundToInt(vertical + horizontal),
+                Mathf.RoundToInt(vertical - horizontal)) + Center;
+        }
+
+        private Vector3 GetCenterOffset()
+        {
+            var boardTile = _tiles.FirstOrDefault();
+            
+            if (boardTile == null) return Vector3.zero;
+
+            return transform.InverseTransformVector(
+                boardTile.CenterPosition.position - boardTile.transform.position);
         }
 
         private void DestroyChildren()
         {
             _tiles.Clear();
+
+            _centerOffset = null;
 
             for (var index = transform.childCount - 1; index >= 0; index--)
             {
@@ -46,20 +79,18 @@ namespace Scripts.Entities
 
         private void BuildTiles()
         {
-            var center = (_configurations.Size - Vector2Int.one) / 2;
-
             for (var x = 0; x < _configurations.Size.x; x++)
             {
                 for (var y = 0; y < _configurations.Size.y; y++)
                 {
-                    _tiles.Add(BuildTile(new Vector2Int(x, y), center));
+                    _tiles.Add(BuildTile(new Vector2Int(x, y)));
                 }
             }
         }
 
-        private BoardTile BuildTile(Vector2Int coordinate, Vector2Int center)
+        private BoardTile BuildTile(Vector2Int coordinate)
         {
-            var offset = coordinate - center;
+            var offset = coordinate - Center;
 
             var boardTile = Instantiate(_components.BoardTile, transform);
 

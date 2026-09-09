@@ -24,9 +24,14 @@ namespace Scripts.Managers
             _components.Board.Initialize();
         }
 
-        public bool TryGetTile(Vector2Int coordinate, out BoardTile boardTile)
+        public BoardTile? GetTile(Vector2Int coordinate)
         {
-            return _components.Board.TryGetTile(coordinate, out boardTile);
+            return _components.Board.GetTile(coordinate);
+        }
+
+        public BoardTile? GetTileAtWorldPosition(Vector2 worldPosition)
+        {
+            return _components.Board.GetTileAtWorldPosition(worldPosition);
         }
 
         [Serializable]

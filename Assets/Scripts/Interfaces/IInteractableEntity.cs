@@ -1,4 +1,5 @@
 using Scripts.Enums;
+using UnityEngine;
 
 namespace Scripts.Interfaces
 {
@@ -9,5 +10,7 @@ namespace Scripts.Interfaces
         bool CanInteract();
 
         void OnInteraction(InteractionType interactionType, InteractionState interactionState);
+
+        void OnDrag(Vector2 worldPosition);
     }
 }

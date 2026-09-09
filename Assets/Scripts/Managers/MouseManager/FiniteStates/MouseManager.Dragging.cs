@@ -17,6 +17,11 @@ namespace Scripts.Managers
                 _parent._currentInteractable = null;
             }
 
+            public override void Update()
+            {
+                _parent._currentInteractable?.OnDrag(_parent.GetMouseWorldPosition());
+            }
+
             public override void OnLeftMouseButton(InteractionState interactionState)
             {
                 if (interactionState != InteractionState.Released) return;

@@ -396,16 +396,71 @@ so a game's own `CustomEditor` still wins over these; when it does, its author c
 - `ButtonMode` greys the button out rather than hiding it, so a play-mode-only action is visible
   (and explains itself) while the editor is stopped.
 
+### HierarchyStyle
+
+A `MonoBehaviour` in `Runtime/Hierarchy` carrying two colour pairs and an `ApplyToChildren` toggle.
+It is the whole authoring surface for hierarchy colouring — put it on a GameObject and
+[[HierarchyPainter]] paints that row.
+
+The colours are wrapped in a nested `[Serializable] class Colors` (background + text) rather than
+sitting loose on the component, so the same pair can appear twice: `Style` for the object's own row
+and `ChildrenStyle` for the rows it lends its colour to. Without the wrapper the second pair would
+be two more fields with prefixed names, and adding an icon or a font style later would double again.
+Nesting it inside `HierarchyStyle` follows the kit's `Components` / `Configurations` habit — the type
+is meaningless on its own, so it stays off the namespace.
+
+`ChildrenStyle` is drawn `[HideIf(nameof(_applyToChildren), false)]`, so it appears only once the
+toggle is on. The [[ShowIfDrawer]] passes `includeChildren: true`, which is what lets it hide and
+size a nested serializable class rather than just a primitive.
+
+The colours live on a **component**, not in an editor-side asset keyed by object id, because Unity
+then serializes them for free: they ride along with prefabs and prefab variants, survive renames,
+reparenting and duplication, and diff in git next to the object they describe. The alternative —
+a `GlobalObjectId` → colour map in a ScriptableObject — has to be keyed, and every key rots
+(prefab instantiation mints a new id, deleted objects leave entries behind, one shared asset is a
+merge magnet). It also puts the "later" features within reach: an icon override or a font style is
+one more serialized field here, drawn by the default inspector with no editor code.
+
+The price, taken deliberately: the class ships in builds. With no `Awake` and no `Update` that is a
+few serialized bytes per marked object and zero frames of work. `#if UNITY_EDITOR` around the fields
+is not an option — the data has to deserialize in a build or the component comes back broken.
+
+- `Colors.BackgroundColor` / `Colors.TextColor` have **public setters**, which exist for
+  [[HierarchyStyleMenu]]. The editor assembly is separate, so `internal` would need an
+  `InternalsVisibleTo`, and the alternative is `SerializedObject` with `"_backgroundColor"` as a
+  magic string. A settable property is the cheapest of the three and the only one a rename cannot
+  silently break. `Style` and `ChildrenStyle` themselves are **getters only** — the pair is mutated
+  in place, and a settable reference would let a caller swap in an instance Unity is not serializing.
+- Both pairs are initialised with `new()` at the field, so a fresh component and a component whose
+  toggle was just turned on both start from a real colour rather than transparent black.
+- `[DisallowMultipleComponent]`, since a second style on one object has no meaning.
+- A **background alpha of 0 disables the paint entirely** rather than meaning "text colour only".
+  Recolouring the label requires repainting the row first, so with nothing drawn underneath the new
+  label would blend over Unity's. Transparent therefore means off, which is at least a rule that can
+  be stated.
+
 ### HierarchyPainter
 
-Colours rows in the **Hierarchy** window by name — a `GameObject` whose name contains `Manager`
-gets a dark blue row, `Canvas` a red one, both with white text. It hangs off the
+Colours rows in the **Hierarchy** window from the [[HierarchyStyle]] on the object. It hangs off the
 hierarchy's per-item GUI callback via `[InitializeOnLoad]`, so it needs no asset and no scene
 object; the callback is unsubscribed before subscribing because a domain reload re-runs the static
 constructor while the old delegate may still be registered.
 
-Rules live in one `List<HierarchyPaintRule>` — keyword, background, text colour — matched
-case-insensitively with `IndexOf`, first match wins. Adding a colour is a line in that list.
+It used to match `GameObject.name` against a hardcoded keyword list (`Manager` → dark blue,
+`Canvas` → red) held in a `HierarchyPaintRule` struct. Both are gone: a colour is now a decision made
+per object, not a consequence of what it happens to be called.
+
+`TryResolveColors` answers with a `HierarchyStyle.Colors`, not with the component, so the caller
+never has to know which of the two pairs it got.
+
+**An object's own style always wins.** If it has a `HierarchyStyle`, its `Style` is used and the
+search stops — a child that states its own colour is never overruled by the section it sits in.
+Only when it has none does the search walk **up** the parents, taking the `ChildrenStyle` of the
+first ancestor with `ApplyToChildren`. So a parent tinting three children still lets one of them
+paint itself differently, which is the point of the split pair.
+
+An ancestor whose style is *not* marked `ApplyToChildren` is skipped rather than ending the search,
+so a plain style only ever paints its own row and cannot mask a section colour set higher up.
 
 - The callback only runs on `EventType.Repaint`. Drawing on the layout/mouse events would fight the
   hierarchy's own hit-testing and swallow clicks.
@@ -420,6 +475,8 @@ case-insensitively with `IndexOf`, first match wins. Adding a colour is a line i
   toward white to keep the selection legible. Inactive objects lerp their *text* toward the
   background and draw their icon at a lower alpha, standing in for the greying-out that was painted
   over.
+- `GetComponent` runs per visible row per repaint. At the few dozen rows a hierarchy shows that is
+  not measurable, and a cache would need invalidating on every add, remove and reparent.
 - `GUIStyle` is built lazily, not in a static field initialiser. `EditorStyles` is not populated
   when `[InitializeOnLoad]` runs during a domain reload, and touching it there throws.
 - 6000.5 made `EditorApplication.hierarchyWindowItemOnGUI` obsolete-as-**error** (CS0619) in favour
@@ -430,6 +487,31 @@ case-insensitively with `IndexOf`, first match wins. Adding a colour is a line i
 - Selection is tested with `Selection.Contains(gameObject)` rather than searching
   `Selection.instanceIDs` / `Selection.entityIds`. The `Object` overload exists on both versions,
   so the version split stays confined to the two callbacks.
+
+### HierarchyStyleMenu
+
+`[MenuItem]` entries under `GameObject/Hierarchy Style/`, which is what the hierarchy's right-click
+menu shows. Six colour presets plus `Clear`, all operating on the whole selection.
+
+The presets are pure convenience: they add the component if it is missing and stamp a colour, so the
+common case is two clicks and anything else is the colour picker in the inspector. The
+[[HierarchyStyle]] component remains the source of truth — the menu writes to it and stores nothing
+of its own.
+
+A preset writes `Style` only, never `ChildrenStyle`. Inheritance is a deliberate act — it needs the
+toggle turned on anyway — and a menu that silently recoloured a whole subtree would be a surprising
+thing for a right-click to do.
+
+- The methods take **no `MenuCommand` parameter**. A `GameObject/` item that declares one is invoked
+  once per selected object; without it Unity calls the method once and the loop over
+  `Selection.gameObjects` is the only iteration.
+- `Undo.AddComponent` for a new component and `Undo.RecordObject` before mutating an existing one,
+  so a preset is a single undo step either way. `Clear` uses `Undo.DestroyObjectImmediate`.
+- Validation methods grey the presets out with an empty selection and `Clear` out when nothing in the
+  selection carries a style. One validate method serves all six presets by stacking `[MenuItem]`
+  attributes, which allow multiples.
+- `EditorApplication.RepaintHierarchyWindow()` after every change: the hierarchy does not repaint on
+  a component being added, so the colour would otherwise appear on the next unrelated redraw.
 
 ---
 
@@ -516,7 +598,7 @@ do not let them come back.
 Every new sample folder needs its own entry in the `samples` array, or it ships invisibly with no
 way to import it.
 
-### csc.rsp — CS1998 suppressed everywhere
+### csc.rsp — CS1998 and CS8632 suppressed everywhere
 
 `-nowarn:1998` ("this async method lacks await") is set through a `csc.rsp` next to every assembly:
 `Assets/csc.rsp` for the predefined assemblies, and one beside each of the four `.asmdef`s. The kit's
@@ -526,8 +608,22 @@ disable CS1998` around each one was noise the no-comments rule already rejects. 
 removed when the rsp files landed.
 
 There is no project-wide switch: Unity regenerates the `.csproj` on every reimport, so
-`Directory.Build.props` and `.editorconfig` severities are discarded. **A new `.asmdef` needs its own
-`csc.rsp` in the same folder**, or CS1998 comes back for that assembly alone.
+`Directory.Build.props` and `.editorconfig` severities are discarded.
+
+`-nowarn:8632` sits beside it, for the same files. It silences "the annotation for nullable
+reference types should only be used in code within a `#nullable` annotations context", which is what
+C# says about a `BoardTile?` return type while nullable reference types are switched off — as they
+are here, and as they stay.
+
+**`?` on a reference type is documentation in this project, not a compiler contract.** It marks a
+return or field that is legitimately null (`Board.GetTile`, `MapManager.GetTile`) so a caller reads
+the signature and knows to branch. Nothing enforces it: there is no flow analysis, no CS8600 family,
+and an unchecked dereference compiles silently. Turning nullable on for real would flag every Unity
+serialized field — they are all null to the compiler and assigned by the inspector — so the
+annotation stays advisory.
+
+**A new `.asmdef` needs its own `csc.rsp` in the same folder**, or both warnings come back for that
+assembly alone.
 
 ### .gitattributes
 
@@ -648,6 +744,51 @@ play-mode operation; previewing the board from an editor `[Button]` would need `
 
 ---
 
+### EntityManager
+
+`MySingleton<EntityManager>` next to `MapManager`. It owns the runtime population of the board:
+`Components.PlayerEntity` is a **prefab**, `Configurations.InitialCoordinate` is a board coordinate,
+and `OnLoad` spawns one player there.
+
+- **`InitialCoordinate` is `Vector2Int`, not `Vector2`.** Board coordinates are integers everywhere
+  (`BoardTile.Coordinate`, `Board.GetTile`), and a float coordinate would only invite an
+  equality comparison that never matches.
+- **Tile lookup returns the tile, not a `bool` with an `out`.** `GetTile` gives back the `BoardTile`
+  or `null`; null *is* the "not found" answer, so the `Try`/`out` pair only added ceremony. The
+  pattern earns its keep when the result is a struct (no null to return) or when the failure is
+  expected and cheap to branch on — neither holds for a `MonoBehaviour` reference.
+- **Two lookups, exact inverses of each other.** `GetTile(Vector2Int)` answers "where is this
+  coordinate"; `GetTileAtWorldPosition(Vector2)` answers "which coordinate is this point", by
+  inverting the placement formula: `dx = y/h + x/w`, `dy = y/h - x/w`, then `RoundToInt`. Rounding
+  those two independently is *exactly* the diamond cell — the square that rounds to an integer pair
+  in tile space maps to a diamond in world space — so the point query needs **no collider at all**,
+  and the arbitrary hit order of a zero-length `Physics2D.RaycastAll` (see
+  [Known issues](#known-issues)) never enters into picking a tile.
+- `CenterOffset` is subtracted before that inverse. Tiles are *placed* by their root but entities
+  stand on `BoardTile.CenterPosition`, which the prefab may offset (a box sprite pivots at its base,
+  its top face does not). Without the correction, feeding a tile's own `CenterPosition` back into
+  `GetTileAtWorldPosition` could return the neighbour — an off-by-one that only shows up as a piece
+  snapping one cell away. It is read from a live tile rather than assumed, cached, and cleared in
+  `DestroyChildren`.
+- `Center` is a property, used by both placement and the inverse. It was a local in `BuildTiles`
+  passed down to `BuildTile`; the two directions have to agree on where the origin is, so it can
+  only be defined once.
+- The spawn goes through `MapManager.GetTile`, never through arithmetic on the board size. The
+  manager asks the board where a coordinate is; only `Board` knows the isometric formula. A missing
+  coordinate is a `Debug.LogError` and no player, not an exception — a bad inspector value should
+  not take the load sequence down.
+- **`EntityManager` must load after `MapManager`** in the `LoadManager` sequence: `GetTile` is
+  answered from the list `Board.Initialize()` fills, and that runs in `MapManager.OnLoad`.
+- The spawned player is `await player.Load()`-ed by hand. `PlayerEntity` is an `ILoadableEntity`,
+  but a prefab instantiated at runtime is not in the scene's load sequence, so nothing else would
+  ever call it. Anything spawning a loadable entity owns its `Load()`.
+- The player is placed on `BoardTile.CenterPosition`, a child transform the prefab authors, not on
+  the tile's own transform — the tile root sits wherever the sprite pivot needs it, and the point an
+  entity stands on is a separate, authorable thing. It is the tile that exposes where to stand; the
+  entity side is still root-positioned, so a prefab whose art is offset from its root will float.
+
+---
+
 ### IInteractableEntity
 
 The contract the `MouseManager` states will speak to: `Priority`, `CanInteract()`,
@@ -660,6 +801,12 @@ The contract the `MouseManager` states will speak to: `Priority`, `CanInteract()
   under the cursor have to be comparable. Leave gaps between values.
 - `CanInteract()` is a **method, not a property**, because the answer depends on the entity's state
   at the moment it is asked, not on stored data. A property reads like a cached flag.
+- `OnDrag(Vector2 worldPosition)` is a **second channel, not an `InteractionState`**. The pointer
+  moving is a continuous stream, not one of the two edges `OnInteraction` reports, and folding it in
+  would have meant an `InteractionState.Moving` that carries no position. `MouseManager.Dragging`
+  pumps it from `Update` at whoever it is holding; what the entity does with a world position — snap
+  to a tile, follow freely, ignore it — is the entity's business, so the manager sends the raw point
+  and no instruction.
 - `InteractionState` lives in `Scripts.Enums`, not nested in `InputManager` as `ClickState`. Both
   the input side and the interaction side name the same two edges, and a nested enum would have made
   every interactable depend on the input manager to describe itself.
@@ -680,12 +827,12 @@ A finite state machine over `Idle` / `Dragging`, built exactly like [MouseManage
 - `Components.DraggingPosition` is exposed as `{ get; private set; }` over a
   `[field: SerializeField]` backing field. A true get-only auto-property makes that field
   `readonly`, which the Unity serializer should not be asked to write into.
-- `Components` holds two transforms with different jobs: `ArtPosition` is what actually moves,
-  `DraggingPosition` is where it goes while dragged. The entity's own transform never moves, so the
-  collider that made it pickable stays where it was.
-- `_initialPosition` is captured in `BaseState.Start`, before any `OnEnter` has run, and is what
-  `Idle` returns the art to. It lives on `BaseState` rather than on the entity because it is only
-  ever read by states.
+- `_initialArtLocalPosition` is captured in `BaseState.Start`, before any `OnEnter` has run, and is
+  what `Idle` returns the art to. It lives on `BaseState` rather than on the entity because it is
+  only ever read by states. **It is a `localPosition`, deliberately.** It used to be a world
+  position, which was correct only while the entity itself never moved; once dragging moves the root,
+  restoring a world position would drop the art back on the tile the drag started from and leave it
+  detached from its own root. The local offset is the thing that is actually invariant.
 - The entity does not listen for input. `MouseManager` decides who was picked and calls
   `OnInteraction`, which is the only thing that drives this machine. That keeps the priority
   arbitration in one place instead of every interactable racing to claim the same click.
@@ -694,11 +841,33 @@ A finite state machine over `Idle` / `Dragging`, built exactly like [MouseManage
   touches the tile. The last one exists because the art's own origin is not on the ground on an
   isometric map — a sprite pivots somewhere up its body, and asking the tilemap about *that* point
   returns the wrong cell.
-- `_currentTile` is commented out. It used to resolve from `GroundPosition` against the tilemap;
-  the board replaced the tilemap, so it is waiting on `BoardTile` coordinates before it can be
-  written against the new lookup.
 - `Load` dereferences `MapManager.Instance`, so **`MapManager` has to load before `PlayerEntity`**
   in the `LoadManager` sequence, and its tiles have to be built before the entity asks for one.
+
+**Dragging: the root moves, and it is always on a tile.**
+
+The entity is four separable things — the root (the whole piece), `ArtPosition` (the sprite only),
+the shadow (another child of the root), and `DraggingPosition` (how far up the art lifts). Dragging
+uses two of them at once, and that split is the whole design:
+
+- **The root snaps, the art lifts.** `Dragging.OnEnter` raises `ArtPosition` to `DraggingPosition`,
+  and from then on `OnDrag` moves the *root* to `BoardTile.CenterPosition`. Because art and shadow
+  are children, the lift rides along and the shadow stays on the board — the piece reads as held
+  above the tile it is over.
+- **The root is never set to the pointer.** It is set to a tile, and only ever to a tile. That is
+  what makes "can't leave the board" fall out for free instead of needing a clamp: when
+  `GetTileAtWorldPosition` returns null the drag simply does nothing that frame, and the piece stays
+  on the last tile it was over. There is no state in which the entity is between tiles or off the
+  edge, so nothing downstream has to handle one.
+- **Releasing needs no move.** "Move to the tile below it" is already true — the root was snapped
+  every frame of the drag, so `Idle.OnEnter` only drops the art back and calls `SnapToCurrentTile`
+  to settle any sub-pixel drift. `_currentTile` is the answer to "where is this piece", maintained
+  during the drag rather than recomputed at the end.
+- `_currentTile` is `BoardTile?` and resolves in `Load` from `GroundPosition`, not from the root:
+  the root sits at the tile *center*, but the point that touches the board is the ground point, and
+  on an isometric map those differ.
+- `MoveToTile` / `SnapToCurrentTile` live on the entity, not on the state. Where the piece is, is a
+  fact about the entity; the states only decide *when* to move it.
 
 ---
 

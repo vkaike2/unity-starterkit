@@ -1,6 +1,6 @@
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using Vkaike2.StarterKit.Hierarchy;
 
 namespace Vkaike2.StarterKit.Editor.Hierarchy
 {
@@ -12,12 +12,6 @@ namespace Vkaike2.StarterKit.Editor.Hierarchy
         private const float InactiveIconAlpha = 0.5f;
         private const float IconSize = 16f;
         private const float LabelLeftPadding = 2f;
-
-        private static readonly List<HierarchyPaintRule> Rules = new()
-        {
-            new HierarchyPaintRule("Manager", new Color32(20, 40, 90, 255), Color.white),
-            new HierarchyPaintRule("Canvas", new Color32(150, 30, 30, 255), Color.white),
-        };
 
         private static GUIStyle _labelStyle;
 
@@ -48,11 +42,12 @@ namespace Vkaike2.StarterKit.Editor.Hierarchy
         {
             if (Event.current.type != EventType.Repaint) return;
             if (gameObject == null) return;
-            if (!TryFindRule(gameObject.name, out var rule)) return;
+            if (!TryResolveColors(gameObject, out var colors)) return;
+            if (colors.BackgroundColor.a <= 0f) return;
 
             var background = Selection.Contains(gameObject)
-                ? Color.Lerp(rule.BackgroundColor, Color.white, SelectionLightenAmount)
-                : rule.BackgroundColor;
+                ? Color.Lerp(colors.BackgroundColor, Color.white, SelectionLightenAmount)
+                : colors.BackgroundColor;
 
             EditorGUI.DrawRect(selectionRect, background);
 
@@ -62,8 +57,8 @@ namespace Vkaike2.StarterKit.Editor.Hierarchy
             var labelRect = new Rect(selectionRect.x + labelOffset, selectionRect.y, selectionRect.width - labelOffset, selectionRect.height);
             var labelStyle = GetLabelStyle();
             labelStyle.normal.textColor = gameObject.activeInHierarchy
-                ? rule.TextColor
-                : Color.Lerp(rule.TextColor, background, InactiveTextFadeAmount);
+                ? colors.TextColor
+                : Color.Lerp(colors.TextColor, background, InactiveTextFadeAmount);
             labelStyle.fontStyle = PrefabUtility.IsAnyPrefabInstanceRoot(gameObject) ? FontStyle.Bold : FontStyle.Normal;
 
             GUI.Label(labelRect, gameObject.name, labelStyle);
@@ -89,17 +84,25 @@ namespace Vkaike2.StarterKit.Editor.Hierarchy
             };
         }
 
-        private static bool TryFindRule(string gameObjectName, out HierarchyPaintRule rule)
+        private static bool TryResolveColors(GameObject gameObject, out HierarchyStyle.Colors colors)
         {
-            foreach (var candidate in Rules)
+            var own = gameObject.GetComponent<HierarchyStyle>();
+            if (own != null)
             {
-                if (!candidate.Matches(gameObjectName)) continue;
-
-                rule = candidate;
+                colors = own.Style;
                 return true;
             }
 
-            rule = default;
+            for (var parent = gameObject.transform.parent; parent != null; parent = parent.parent)
+            {
+                var inherited = parent.GetComponent<HierarchyStyle>();
+                if (inherited == null || !inherited.ApplyToChildren) continue;
+
+                colors = inherited.ChildrenStyle;
+                return true;
+            }
+
+            colors = null;
             return false;
         }
     }
