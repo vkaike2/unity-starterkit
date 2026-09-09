@@ -3,6 +3,7 @@ using System.Linq;
 using Scripts.Managers;
 using Unity.Mathematics;
 using UnityEngine;
+using Vkaike2.StarterKit.Managers;
 
 namespace Scripts.Entities.Player
 {
@@ -17,6 +18,7 @@ namespace Scripts.Entities.Player
 
             public override void OnEnter()
             {
+                MusicManager.Instance.Play(_components.PlacementSoundEffect, Vkaike2.StarterKit.Enums.AudioChannel.SoundEffect);
                 _possibleCoordinatesToMove = TryToCalculatePossibleCoordinatesToMove(_movementRange);
                 if (_possibleCoordinatesToMove.Count == 0)
                 {
@@ -27,6 +29,7 @@ namespace Scripts.Entities.Player
 
             public override void OnExit()
             {
+                MusicManager.Instance.Play(_components.PlacementSoundEffect, Vkaike2.StarterKit.Enums.AudioChannel.SoundEffect);
                 _possibleCoordinatesToMove.Clear();
             }
 
@@ -60,7 +63,7 @@ namespace Scripts.Entities.Player
                     .Select(coordinate => MapManager.Instance.GetTile(coordinate))
                     .Where(tile => tile != null)
                     .ToList();
-                    
+
                 return result;
             }
 

@@ -128,6 +128,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 752333448}
+  - component: {fileID: 752333450}
   - component: {fileID: 752333449}
   m_Layer: 0
   m_Name: Load Manager
@@ -178,6 +179,13 @@ MonoBehaviour:
           <GameObject>k__BackingField: {fileID: 17263912167297300, guid: a42cc51f7a2146e46a4d2c197119bd64, type: 3}
           <Parent>k__BackingField: {fileID: 0}
           _object: {fileID: 0}
+        - name: '[GameObject] MusicManager'
+          _shouldLoad: 1
+          _dataType: 1
+          <ScenePath>k__BackingField: Assets/Scenes/Sc_2dGameExample.unity
+          <GameObject>k__BackingField: {fileID: 17263912167297300, guid: eb00e9de3c8641f41a70acbfe4b7cf33, type: 3}
+          <Parent>k__BackingField: {fileID: 0}
+          _object: {fileID: 0}
         - name: '[Scene] Sc_GameManagers.unity'
           _shouldLoad: 1
           _dataType: 0
@@ -201,6 +209,25 @@ MonoBehaviour:
         <LoadableEntities>k__BackingField: []
   _components:
     <DefaultLoader>k__BackingField: {fileID: 2121471231}
+--- !u!114 &752333450
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 752333447}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b1c4a92e0d54f3ba6c8d1e2f3a4b5c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Vkaike2.StarterKit::Vkaike2.StarterKit.Hierarchy.HierarchyStyle
+  _style:
+    _backgroundColor: {r: 0.06968674, g: 0.1953289, b: 0.509434, a: 1}
+    _textColor: {r: 1, g: 1, b: 1, a: 1}
+  _applyToChildren: 1
+  _childrenStyle:
+    _backgroundColor: {r: 0.1742168, g: 0.24573435, b: 0.4245283, a: 1}
+    _textColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &1166949238
 GameObject:
   m_ObjectHideFlags: 0
@@ -495,7 +522,6 @@ GameObject:
   m_Component:
   - component: {fileID: 2058332459}
   - component: {fileID: 2058332458}
-  - component: {fileID: 2058332457}
   - component: {fileID: 2058332460}
   m_Layer: 0
   m_Name: Main Camera
@@ -504,14 +530,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!81 &2058332457
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2058332456}
-  m_Enabled: 1
 --- !u!20 &2058332458
 Camera:
   m_ObjectHideFlags: 0

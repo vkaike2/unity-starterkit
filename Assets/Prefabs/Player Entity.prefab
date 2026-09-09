@@ -268,6 +268,7 @@ MonoBehaviour:
     <SpritePosition>k__BackingField: {fileID: 291365873971137419}
     <ShadowPosition>k__BackingField: {fileID: 8597906390200823880}
     <GroundPosition>k__BackingField: {fileID: 542398910687648718}
+    <PlacementSoundEffect>k__BackingField: {fileID: 11400000, guid: 76b2349aa2629df4ab18461e512ec535, type: 2}
 --- !u!61 &4608139538813912522
 BoxCollider2D:
   m_ObjectHideFlags: 0

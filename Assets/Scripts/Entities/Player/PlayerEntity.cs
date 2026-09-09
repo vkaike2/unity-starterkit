@@ -7,6 +7,7 @@ using UnityEngine;
 using Vkaike2.StarterKit.Base.Abstracts;
 using Vkaike2.StarterKit.Enums;
 using Vkaike2.StarterKit.Managers;
+using Vkaike2.StarterKit.ScriptableObjects;
 
 namespace Scripts.Entities.Player
 {
@@ -117,6 +118,9 @@ namespace Scripts.Entities.Player
             [field: SerializeField] public Transform SpritePosition { get; private set; }
             [field: SerializeField] public Transform ShadowPosition { get; private set; }
             [field: SerializeField] public Transform GroundPosition { get; private set; }
+
+            [field: Header("Sound Effects")]
+            [field: SerializeField] public SoAudioTrack PlacementSoundEffect { get; set; }
 
             protected override void Validate()
             {
