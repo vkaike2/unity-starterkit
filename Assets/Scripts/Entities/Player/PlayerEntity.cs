@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Scripts.Enums;
 using Scripts.Interfaces;
+using Scripts.Managers;
 using UnityEngine;
 using Vkaike2.StarterKit.Base.Abstracts;
+using Vkaike2.StarterKit.Components.Animations;
 using Vkaike2.StarterKit.Enums;
 using Vkaike2.StarterKit.Managers;
 using Vkaike2.StarterKit.ScriptableObjects;
@@ -43,8 +45,11 @@ namespace Scripts.Entities.Player
                 UpdateOrder.Entities,
                 MyFixedUpdate);
 
-            _currentTile = initialTile;
+            _components.Animator.Initialize();
 
+
+            _currentTile = initialTile;
+            ChangePlayerAnimationBasedOnTile(_currentTile);
             ChangeState(State.Idle);
         }
 
@@ -100,6 +105,16 @@ namespace Scripts.Entities.Player
             _currentState.OnEnter();
         }
 
+        private void ChangePlayerAnimationBasedOnTile(BoardTile tile)
+        {
+            BoardTile centerTIle = MapManager.Instance.GetCenterTile();
+
+            _components.Animator.SetLayer(
+                tile.transform.position.y <= centerTIle.transform.position.y
+                ? _configurations.LayerBack
+                : _configurations.LayerFront);
+        }
+
         public enum State
         {
             Idle,
@@ -109,7 +124,10 @@ namespace Scripts.Entities.Player
         [Serializable]
         private class Configurations : ValidatableFields
         {
+            public string AnimIdle => "Idle";
 
+            public string LayerBack => "Back";
+            public string LayerFront => "Front";
         }
 
         [Serializable]
@@ -118,6 +136,8 @@ namespace Scripts.Entities.Player
             [field: SerializeField] public Transform SpritePosition { get; private set; }
             [field: SerializeField] public Transform ShadowPosition { get; private set; }
             [field: SerializeField] public Transform GroundPosition { get; private set; }
+
+            [field: SerializeField] public CustomAnimator2d Animator { get; set; }
 
             [field: Header("Sound Effects")]
             [field: SerializeField] public SoAudioTrack PlacementSoundEffect { get; set; }

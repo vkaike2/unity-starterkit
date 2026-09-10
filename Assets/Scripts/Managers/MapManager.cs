@@ -34,6 +34,12 @@ namespace Scripts.Managers
             return _components.Board.GetTileAtWorldPosition(worldPosition);
         }
 
+        public BoardTile GetCenterTile()
+        {
+            return _components.Board.GetCenterTile();
+        }
+
+
         [Serializable]
         private class Configurations : ValidatableFields
         {

@@ -12,7 +12,7 @@ namespace Scripts.Entities
         [SerializeField] private Components _components;
 
         public IReadOnlyList<BoardTile> Tiles => _tiles;
-        
+
         private readonly List<BoardTile> _tiles = new();
 
         private Vector2Int Center => (_configurations.Size - Vector2Int.one) / 2;
@@ -38,6 +38,11 @@ namespace Scripts.Entities
             return _tiles.FirstOrDefault(tile => tile.Coordinate == coordinate);
         }
 
+        public BoardTile GetCenterTile()
+        {
+            return GetTile(Center);
+        }
+
         public BoardTile? GetTileAtWorldPosition(Vector2 worldPosition)
         {
             return GetTile(GetCoordinateAtWorldPosition(worldPosition));
@@ -58,7 +63,7 @@ namespace Scripts.Entities
         private Vector3 GetCenterOffset()
         {
             var boardTile = _tiles.FirstOrDefault();
-            
+
             if (boardTile == null) return Vector3.zero;
 
             return transform.InverseTransformVector(

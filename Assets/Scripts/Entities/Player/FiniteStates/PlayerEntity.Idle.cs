@@ -8,8 +8,9 @@ namespace Scripts.Entities.Player
 
             public override void OnEnter()
             {
+                _components.Animator.Play(_configurations.AnimIdle);
+                
                 _components.SpritePosition.localPosition = _initialSpriteLocalPosition;
-
                 SnapToCurrentTile(snappingOnlyShadow: false);
             }
 

@@ -917,6 +917,153 @@ file per state. States are `private` nested classes, so they reach `_components`
 
 ---
 
+## Components
+
+### CustomAnimator
+
+A sprite-swapping animator: a list of clips, each a list of sprites plus a one-line duration string.
+It exists because the Unity `Animator` brings a state machine and a per-object controller asset with
+it, and a pile of enemies sharing the same animation shapes wants neither. The whole configuration
+lives on the component, so it copy/pastes onto another prefab and only the sprite lists change.
+
+- Folder and namespace are `Components/Animations`, **not** `Components/Animator`. A namespace
+  segment named `Animator` shadows `UnityEngine.Animator` for every type declared inside it, which
+  would make [[AnimatorExtension]] unreachable from here.
+- The nested clip class is `Clip`, not `Animation`, for the same reason: `UnityEngine.Animation` is a
+  real component type, and a nested class silently winning that lookup is a trap.
+- The inspector label field must literally be called `name` (`[HideInInspector] public string name`).
+  Unity reads that one field to title a list element; any other name just adds a text box. Same
+  convention as `LoadSequence.Entity`.
+
+#### The configuration string
+
+`t:{total seconds} f{index}:{seconds}`. `t` is the duration of one full pass; any frame without an
+explicit `f` splits what is left of the total between them. `t:1 f0:0.4` over four frames is a held
+first frame and three quick ones.
+
+- Parsed with `CultureInfo.InvariantCulture`. `float.Parse` on a machine with a comma decimal
+  separator reads `0.25` as `25`, which is a hundredfold timing bug that only appears on someone
+  else's computer.
+- Durations are `float`, not `int`. Single frames are routinely well under a second.
+- `TryBuildFrames` returns a message rather than logging, so `OnValidate` and the runtime lazy build
+  share one parser and one wording. Every rejection names the offending order.
+
+#### Layers
+
+A clip does not hold sprites, it holds `Layer`s — a name plus a sprite list. Every layer of a clip
+holds the *same frames seen differently*: same count, same timing, same indices, same events. The
+motivating case is a character animated front-facing and back-facing; `walk` is one clip either way,
+and turning around must not restart it.
+
+- **The layer is animator state, not clip state.** `SetLayer("Back")` sets it once and it survives
+  every later `Play`. A clip resolves the name to an index when it starts; `SetLayer` re-resolves it
+  for the clip already running and repaints the frame on screen, so the swap happens mid-animation
+  with the frame index and elapsed time untouched.
+- **An unknown layer name falls back to index 0.** Most clips have a single layer, and a character
+  facing away still has to be able to play a clip that was only ever drawn one way. To keep that
+  from swallowing typos, the component collects every layer name declared by any clip and `SetLayer`
+  errors on a name outside that set.
+- **A single layer needs no name.** That is the old shape of the component, unchanged in behaviour.
+  Two or more layers must all be named and named uniquely, checked in `OnValidate`.
+- **Layers must agree on frame count**, or the shared configuration string means nothing. Rejected by
+  the same `TryBuildFrames` path as every other configuration error.
+- `Frame` holds `Sprite[] SpritesByLayer`, built once per clip, so switching layer is an array index
+  rather than a name lookup per swap.
+- **`Stop` deliberately does not clear `_currentFrame`.** It is what is *on screen*, not what is
+  playing. A static idle clip ends its playback immediately, and a later `SetLayer` still has to be
+  able to repaint it — clearing it there left a character facing the wrong way after turning around.
+- `Layer` is nested inside `Clip` with public members, and `Frame` is `public` for the same reason: a
+  containing type gets no access to its nested type's private members, only the other way round.
+- Restructuring `_spriteFrames` into `_layers` **breaks existing serialized data**. There is no
+  `FormerlySerializedAs` across that shape change; sprite lists had to be dragged in again.
+
+#### Single frame clips
+
+A clip with **one sprite and an empty configuration is static**: it swaps the sprite and stops.
+`Clip.IsStatic` says so, and everything else follows from two properties, so `PlayClips` needed no
+change at all:
+
+- `ItLoops => _itLoops && !IsStatic`, so a static clip never re-enters the frame loop. Without that,
+  ticking *it loops* on a held sprite spins one `NextFrameAsync` per frame forever, doing nothing.
+- `TryBuildFrames` short-circuits to a single zero-duration frame before the configuration is even
+  looked at. The zero duration costs one `NextFrameAsync` before playback ends — the sprite is
+  already on screen by then, since it is set before the await.
+- `_configuration` no longer defaults to `ConfigurationExample`. A pre-filled `t:1 f0:0.4` would make
+  every new single-sprite clip fail validation until the field was cleared by hand. The example
+  survives in the tooltip and in the empty-configuration error, which now names the frame count so
+  the message reads as *this clip has more than one frame, it needs timing*.
+- `OnValidate` rejects a static clip with a `NextClip`: it has no duration, so the chain would be
+  invisible. Give it a `t:` and it is an ordinary one-frame clip again.
+- The inspector label reads `idle (static)`, ahead of `(loops)` and `-> next`.
+
+#### Playback
+
+- Cancellation is a `CancellationTokenSource` linked to `destroyCancellationToken`, **not**
+  `Awaitable.Cancel()` on the stored awaitable. `Awaitable` is pooled and recycled the moment it is
+  awaited, so holding one past its completion and cancelling it later can cancel an unrelated
+  operation somewhere else in the game.
+- The clip chain (`NextClip`) is a `while` loop inside one playback method, not `Play()` calling
+  itself from the end of the previous clip. The recursive version cancelled the very awaitable it
+  was still running inside.
+- A looping clip re-enters through a `do/while` over the frame list. The bug worth remembering: the
+  original reset `i = 0` at the last frame and let `i++` carry it to `1`, so every pass after the
+  first skipped frame 0.
+- A frame with a zero duration awaits `NextFrameAsync` instead of `WaitForSecondsAsync(0)`. Without
+  that, a looping clip whose durations all resolve to zero is an infinite loop that never yields and
+  hangs the editor. An empty frame list ends playback for the same reason.
+- `OnDisable` cancels and `OnEnable` replays `CurrentClipName`. An `Awaitable` is driven by the
+  player loop, not by the component, so a deactivated object would otherwise keep swapping sprites.
+  Together they make the component pool-friendly for free.
+- `EnsureReady` resolves the renderer and builds the name lookup on first use, so `Play` works even
+  when whoever owns the object forgot to call `Initialize`. `Initialize` is still the entry point
+  that honours `StartPlaying`.
+- `_useUnscaledTime` is polled per frame rather than handed to `WaitForSecondsAsync`, which only
+  knows scaled time. UI animations that have to keep moving during a pause need it.
+
+#### Frame events
+
+`Initialize(params ClipEvents[])` is how the owner wires callbacks: a clip name, a
+`Dictionary<int, Action>` keyed by frame index, and an optional `Finished`. Nothing about events is
+serialized, and the animator never decides what an event means — it only knows *when*.
+
+- **The owner declares them, not the inspector.** A `CustomAnimator2d` has exactly one owner (the
+  entity that calls `Initialize`), so changing what frame 3 of `attack` does is a code edit in that
+  entity, not a prefab edit. That is the whole reason this is not a serialized `UnityEvent` list.
+- **A second `Initialize` replaces the table wholesale**, so there is no `On`/`Off` pair and no way
+  to leak a subscriber. `Initialize()` with no arguments clears it.
+- **Events live on the component, not on `Clip.Frame`.** Baking an `Action` into a frame was the
+  first idea and it is wrong twice: `_frames` is a cache `OnValidate` nulls at will, so callbacks
+  registered after the first build would silently vanish; and a pure sprite/duration table that
+  never references a game entity is what keeps a pooled owner from leaking.
+- **Index-keying cannot survive reordering.** Deleting a sprite is caught (`Initialize` checks every
+  index against the clip's real frame count); reordering two sprites is not, and frame 3 quietly
+  becomes a different pose. Accepted on purpose — the alternative was markers in the configuration
+  string, which puts the wiring back in the inspector.
+- **Every callback is invoked inside its own `try/catch`.** The dispatch sits in the same `try` as
+  the playback loop, which only catches `OperationCanceledException`; without the inner catch a
+  throwing callback unwinds `PlayClips` and freezes the sprite mid-clip.
+- **Calling `Play` from inside a callback works** — it cancels the token the loop is about to await
+  on, so the next `await` throws and unwinds cleanly. `Finished` is followed by an explicit
+  `ThrowIfCancellationRequested`, because a `Play` from there has no await left to notice it and
+  would otherwise let the old chain advance into `NextClip` over the new playback.
+- `Finished` fires when a clip ends, per clip in a chain. A looping clip never reaches it. It exists
+  because the last frame *enters* before its duration elapses, so a frame event on the last index is
+  early by that frame's duration.
+- `Initialize` forces the clip parse (it needs frame counts to validate indices), so a broken
+  configuration string now surfaces at load rather than on the first `Play`.
+
+#### Validation
+
+`OnValidate` checks what cannot be checked at runtime without a cost: the renderer matching `_isUI`,
+at least one clip, unique clip names, every `NextClip` resolving to a real clip, no null sprites, and
+the configuration parsing. Cross-clip checks (duplicates, chain targets) live on the component
+because a `Clip` cannot see its siblings; everything else lives on the `Clip`.
+
+It deliberately does **not** use [[ValidatableFields]] — that base is for the `Components` /
+`Configurations` reference groups, and none of these are null checks on references.
+
+---
+
 ## Known issues
 
 - `SceneLoader.LoadSequence()` — the `ILoadableEntity.Load()` a scene's own loader exposes — was

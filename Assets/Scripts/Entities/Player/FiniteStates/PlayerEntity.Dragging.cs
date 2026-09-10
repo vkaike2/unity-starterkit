@@ -83,6 +83,8 @@ namespace Scripts.Entities.Player
                     //diagonals
                     coordinates.Add(new Vector2Int(center.x + i, center.y + i));
                     coordinates.Add(new Vector2Int(center.x - i, center.y - i));
+                    coordinates.Add(new Vector2Int(center.x + i, center.y - i));
+                    coordinates.Add(new Vector2Int(center.x - i, center.y + i));
                 }
                 coordinates.Add(center);
                 return coordinates;

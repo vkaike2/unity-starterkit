@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 291365873971137419}
   - component: {fileID: 6674866200510108174}
+  - component: {fileID: 6343304728054200076}
   m_Layer: 0
   m_Name: Sprite
   m_TagString: Untagged
@@ -92,6 +93,36 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 1
   m_BlendShapeWeights: []
+--- !u!114 &6343304728054200076
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 172538690132506882}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb00090f156da4e4bb2ef08a07ccce87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Vkaike2.StarterKit::Vkaike2.StarterKit.Components.Animations.CustomAnimator2d
+  _isUI: 0
+  _useUnscaledTime: 0
+  _startPlaying: 0
+  _clips:
+  - name: Idle (static)
+    _clipName: Idle
+    _configuration: 
+    _itLoops: 0
+    _nextClip: 
+    _layers:
+    - name: Front
+      _layerName: Front
+      _spriteFrames:
+      - {fileID: 3131728131988353621, guid: 38759484fdebc0748ab608b0e9d587d9, type: 3}
+    - name: Back
+      _layerName: Back
+      _spriteFrames:
+      - {fileID: -5653677724073140822, guid: 38759484fdebc0748ab608b0e9d587d9, type: 3}
 --- !u!1 &1828751406865593283
 GameObject:
   m_ObjectHideFlags: 0
@@ -268,6 +299,7 @@ MonoBehaviour:
     <SpritePosition>k__BackingField: {fileID: 291365873971137419}
     <ShadowPosition>k__BackingField: {fileID: 8597906390200823880}
     <GroundPosition>k__BackingField: {fileID: 542398910687648718}
+    <Animator>k__BackingField: {fileID: 6343304728054200076}
     <PlacementSoundEffect>k__BackingField: {fileID: 11400000, guid: 76b2349aa2629df4ab18461e512ec535, type: 2}
 --- !u!61 &4608139538813912522
 BoxCollider2D:

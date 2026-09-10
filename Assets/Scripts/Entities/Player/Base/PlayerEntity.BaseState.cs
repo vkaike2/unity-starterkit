@@ -44,7 +44,7 @@ namespace Scripts.Entities.Player
             protected void SnapToCurrentTile(bool snappingOnlyShadow)
             {
                 if (CurrentTile == null) return;
-
+                _parent.ChangePlayerAnimationBasedOnTile(CurrentTile);
                 if (snappingOnlyShadow)
                 {
                     _components.ShadowPosition.position = CurrentTile.CenterPosition.position;
