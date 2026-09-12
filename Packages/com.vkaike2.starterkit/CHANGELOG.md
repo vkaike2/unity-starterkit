@@ -11,9 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `com.unity.ugui` declared as a package dependency.
 
-### Changed
+### Removed
 
-- Samples moved to `Samples~/Demo` and exposed as a single importable sample.
+- The `samples` array, which pointed at folders that never existed. `Samples/` ships as a plain
+  package folder instead.
 
 ## [0.1.0] - 2026-08-30
 

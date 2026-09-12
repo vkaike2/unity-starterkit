@@ -581,29 +581,26 @@ Written for picking whatever is under the cursor without the caller knowing abou
 
 ## Packaging
 
-### Samples~
+### Samples ship as a plain folder
 
-Samples live in `Samples~/`, with the tilde. The tilde hides the folder from Unity's asset database,
-so the examples ship inside the package but are **not** compiled into every game that installs the
-kit. Package Manager reads the `samples` array in `package.json` and offers an Import button, which
-copies the chosen sample into the consuming project's `Assets/Samples/`.
+`Samples/` has no tilde, and that is deliberate. Unity's supported way to ship examples is
+`Samples~` + a `samples` array in `package.json`, which hides the folder from the asset database and
+gives consumers an Import button. That was tried and reverted on 2026-09-12.
 
-The trade: a `~` folder is invisible to the editor *in this repo too*, so the example scene cannot be
-opened from the Project window while working on the kit. Open it by file path, or import it the way a
-consumer would.
+The reason: a `~` folder is invisible to the editor *in this repo too*. The kit is developed here, so
+the demo scene and its prefabs would have to be imported through Package Manager, edited under
+`Assets/Samples/`, and copied back by hand every time. Being able to open the examples directly is
+worth more than the packaging correctness, because improving them is the daily work.
 
-Keep the `.meta` files inside `Samples~`, even though Unity never reads them there. Import copies
-them along with the assets, so the GUIDs survive; without them Unity mints fresh GUIDs on import and
-every reference *inside* the sample breaks — the demo scene loses its prefabs, the prefabs lose their
-mixer and ScriptableObjects.
+What this costs, and it is a real cost:
 
-Every new sample folder needs its own entry in the `samples` array, or it ships invisibly with no
-way to import it. The path in that entry is a folder under `Samples~`, never `Samples~` itself.
+- The scene and its assets are read-only in any project that installs the kit from git — Unity
+  refuses to open a scene inside an immutable package. Consumers copy them into `Assets/` by hand.
+- `Samples/Resources/` is a live `Resources` folder, so anything under it is force-included in every
+  consuming game's player build.
 
-The folder drifted back to a plain `Samples/` at some point, which is how the demo scene ended up
-shipping as a read-only asset in consuming projects — and `Samples/Resources/` with it, force-including
-a test audio clip in every player build. If the scene is ever openable from the Project window in this
-repo, the tilde has been lost again.
+If a consuming project ever needs to open the demo scene, copy the folder out of
+`Library/PackageCache/` into that project's `Assets/`. The copy is writable.
 
 ### Dependencies
 

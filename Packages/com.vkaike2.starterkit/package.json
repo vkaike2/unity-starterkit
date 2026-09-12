@@ -14,12 +14,5 @@
   "keywords": [
     "starterkit",
     "utilities"
-  ],
-  "samples": [
-    {
-      "displayName": "Demo",
-      "description": "Scene, prefabs and assets wiring LoadManager, UpdateManager and MusicManager together.",
-      "path": "Samples~/Demo"
-    }
   ]
 }
