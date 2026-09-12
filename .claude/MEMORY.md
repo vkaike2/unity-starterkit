@@ -592,11 +592,28 @@ The trade: a `~` folder is invisible to the editor *in this repo too*, so the ex
 opened from the Project window while working on the kit. Open it by file path, or import it the way a
 consumer would.
 
-A `~` folder gets no `.meta` files — Unity never sees it. The old ones were deleted in the rename;
-do not let them come back.
+Keep the `.meta` files inside `Samples~`, even though Unity never reads them there. Import copies
+them along with the assets, so the GUIDs survive; without them Unity mints fresh GUIDs on import and
+every reference *inside* the sample breaks — the demo scene loses its prefabs, the prefabs lose their
+mixer and ScriptableObjects.
 
 Every new sample folder needs its own entry in the `samples` array, or it ships invisibly with no
-way to import it.
+way to import it. The path in that entry is a folder under `Samples~`, never `Samples~` itself.
+
+The folder drifted back to a plain `Samples/` at some point, which is how the demo scene ended up
+shipping as a read-only asset in consuming projects — and `Samples/Resources/` with it, force-including
+a test audio clip in every player build. If the scene is ever openable from the Project window in this
+repo, the tilde has been lost again.
+
+### Dependencies
+
+`package.json` declares `com.unity.ugui`, because `LoaderUI` and `CustomAnimator2d` use
+`UnityEngine.UI`, which is a package rather than a built-in module. Nothing else needs declaring:
+`UnityEngine.Audio`, `Animator` and `SceneManagement` are built-in modules, always present.
+
+The rule is that anything outside a built-in module has to be listed here, or the kit compiles in
+this repo — which has the package in its project manifest — and fails in a consuming project that
+does not.
 
 ### csc.rsp — CS1998 and CS8632 suppressed everywhere
 

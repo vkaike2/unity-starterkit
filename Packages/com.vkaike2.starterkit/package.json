@@ -1,6 +1,6 @@
 {
   "name": "com.vkaike2.starterkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Starter Kit",
   "description": "A collection of reusable Unity utilities and systems.",
   "unity": "6000.0",
@@ -8,20 +8,18 @@
     "name": "vkaike2",
     "url": "https://github.com/vkaike2"
   },
+  "dependencies": {
+    "com.unity.ugui": "2.0.0"
+  },
   "keywords": [
     "starterkit",
     "utilities"
   ],
   "samples": [
     {
-      "displayName": "Scene Example",
-      "description": "Scene wiring the LoadManager and UpdateManager together.",
-      "path": "Samples~/SceneExample"
-    },
-    {
-      "displayName": "ScriptableObject Example",
-      "description": "LoadSequence asset and Update Manager prefab.",
-      "path": "Samples~/ScriptableObjectExample"
+      "displayName": "Demo",
+      "description": "Scene, prefabs and assets wiring LoadManager, UpdateManager and MusicManager together.",
+      "path": "Samples~/Demo"
     }
   ]
 }
